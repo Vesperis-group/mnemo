@@ -1,0 +1,88 @@
+name: Release
+
+# Déclenché à chaque push sur main (typiquement le merge d'une PR).
+# release-it bumpe la version (Cargo.toml), met à jour le CHANGELOG, crée le
+# tag vX.Y.Z, pousse le commit de release et publie la GitHub Release avec ses
+# artefacts.
+#
+# Garde anti-boucle : le commit de release contient « [skip ci] ». GitHub ignore
+# nativement les évènements push/pull_request dont le message HEAD contient
+# « [skip ci] ». La condition `if` ci-dessous est une double sécurité.
+on:
+  push:
+    branches: [main]
+
+# Permissions minimales nécessaires à release-it.
+permissions:
+  contents: write # commit, tag, push, création de release
+  pull-requests: read # lecture du contexte des PR (changelog)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build, version et publication
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout (historique complet)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # RELEASE_TOKEN (PAT) si main est protégée et n'autorise pas le
+          # GITHUB_TOKEN à pousser ; sinon repli sur le token par défaut.
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install release tooling
+        run: npm ci
+
+      # ----- Quality gate complet avant toute release -----
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Shell scripts syntax check
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/uninstall.sh
+          bash -n scripts/lib/bashrc.sh
+          bash -n scripts/package-release.sh
+
+      # ----- Release versionnée (bump + tag + GitHub Release + artefacts) -----
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run release-it
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: npm run release

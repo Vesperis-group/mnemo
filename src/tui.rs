@@ -236,7 +236,7 @@ pub fn fuzzy_filter(records: &[CommandRecord], query: &str, matcher: &mut Matche
         })
         .collect();
     // Score décroissant ; à score égal, on conserve l'ordre récent d'origine.
-    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
     scored.into_iter().map(|(i, _)| i).collect()
 }
 

@@ -1,0 +1,43 @@
+# Configuration pre-commit (optionnelle, NON imposée automatiquement).
+#
+# Activation manuelle, quand vous le souhaiterez :
+#   pipx install pre-commit
+#   pre-commit install
+#   pre-commit run --all-files
+#
+# Hooks volontairement légers et non intrusifs.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Hooks Rust locaux (utilisent la toolchain déjà installée).
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-push]
