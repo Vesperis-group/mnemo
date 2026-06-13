@@ -63,6 +63,14 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          # IMPORTANT : la clé par défaut ne distingue pas la version d'image
+          # (« Linux » seulement). Les artefacts hôte de build-scripts compilés
+          # sur ubuntu-24.04 (glibc 2.39) seraient alors restaurés ici, sur
+          # ubuntu-22.04 (glibc 2.35), et échoueraient à l'exécution
+          # (« version `GLIBC_2.39' not found »). On isole donc le cache par
+          # image de runner.
+          prefix-key: v0-rust-ubuntu2204
 
       - name: Setup Node.js (LTS)
         uses: actions/setup-node@v4
