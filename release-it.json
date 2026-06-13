@@ -16,8 +16,8 @@
     "releaseName": "mnemo v${version}",
     "autoGenerate": false,
     "assets": [
-      "mnemo-linux-x86_64.tar.gz",
-      "mnemo-linux-x86_64.tar.gz.sha256"
+      "mnemo-v*-linux-*.tar.gz",
+      "mnemo-v*-linux-*.tar.gz.sha256"
     ]
   },
   "npm": {
@@ -25,7 +25,12 @@
     "ignoreVersion": true
   },
   "hooks": {
-    "after:bump": "cargo build --release && bash scripts/package-release.sh"
+    "after:bump": [
+      "cargo build --release",
+      "MNEMO_VERSION=${version} MNEMO_TARGET_LABEL=x86_64-unknown-linux-gnu-glibc2.35 MNEMO_BINARY_PATH=target/release/mnemo bash scripts/package-release.sh",
+      "cargo build --release --target x86_64-unknown-linux-musl",
+      "MNEMO_VERSION=${version} MNEMO_TARGET_LABEL=x86_64-unknown-linux-musl MNEMO_BINARY_PATH=target/x86_64-unknown-linux-musl/release/mnemo bash scripts/package-release.sh"
+    ]
   },
   "plugins": {
     "@release-it/bumper": {

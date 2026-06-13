@@ -3,7 +3,19 @@ name: Release
 # Déclenché à chaque push sur main (typiquement le merge d'une PR).
 # release-it bumpe la version (Cargo.toml), met à jour le CHANGELOG, crée le
 # tag vX.Y.Z, pousse le commit de release et publie la GitHub Release avec ses
-# artefacts.
+# artefacts Linux (musl statique + GNU/glibc 2.35).
+#
+# Linux uniquement (pas de Windows ni macOS).
+#
+# Choix d'architecture : un seul job sur ubuntu-22.04. Pourquoi pas une matrice
+# multi-runner ? Parce que release-it crée la Release ET attache les assets de
+# manière atomique ; tout construire dans un job unique évite les courses entre
+# jobs (qui crée la release ? qui attache quoi ?) et reste simple à maintenir.
+#   - musl  : binaire statique, construit via la cible x86_64-unknown-linux-musl.
+#   - glibc : binaire GNU construit nativement sur ubuntu-22.04 -> glibc 2.35,
+#             compatible avec les distributions récentes ET un peu plus anciennes.
+# L'ajout futur d'aarch64 (cross-compilation) pourra se faire en étendant la
+# liste des cibles dans le hook `after:bump` de release-it.json.
 #
 # Garde anti-boucle : le commit de release contient « [skip ci] ». GitHub ignore
 # nativement les évènements push/pull_request dont le message HEAD contient
@@ -26,8 +38,9 @@ env:
 
 jobs:
   release:
-    name: Build, version et publication
-    runs-on: ubuntu-latest
+    name: Build Linux (musl + glibc2.35) et publication
+    # glibc 2.35 : le binaire GNU est lié à la glibc du runner.
+    runs-on: ubuntu-22.04
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     steps:
       - name: Checkout (historique complet)
@@ -43,6 +56,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -66,8 +83,20 @@ jobs:
       - name: Tests
         run: cargo test
 
-      - name: Build release
+      - name: Build release (sanity)
         run: cargo build --release
+
+      - name: Build musl (sanity)
+        run: cargo build --release --target x86_64-unknown-linux-musl
+
+      - name: Inspect binaries (file / ldd)
+        run: |
+          echo "== GNU/glibc =="
+          file target/release/mnemo
+          ldd target/release/mnemo || true
+          echo "== musl (statique attendu) =="
+          file target/x86_64-unknown-linux-musl/release/mnemo
+          ldd target/x86_64-unknown-linux-musl/release/mnemo || true
 
       - name: Shell scripts syntax check
         run: |
@@ -77,6 +106,9 @@ jobs:
           bash -n scripts/package-release.sh
 
       # ----- Release versionnée (bump + tag + GitHub Release + artefacts) -----
+      # Les binaires définitifs sont (re)construits APRÈS le bump de version par
+      # le hook `after:bump` de release-it.json, afin que `mnemo version` reporte
+      # la bonne version. Les archives sont ensuite attachées via le glob d'assets.
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
