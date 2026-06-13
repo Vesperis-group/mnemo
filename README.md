@@ -1,11 +1,9 @@
 # mnemo
 
-<!-- Badges : remplacer <USER> par le nom du compte/organisation GitHub une fois le dépôt créé. -->
-[![CI](https://github.com/REPLACE_ME/mnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/REPLACE_ME/mnemo/actions/workflows/ci.yml)
-[![Release](https://github.com/REPLACE_ME/mnemo/actions/workflows/release.yml/badge.svg)](https://github.com/REPLACE_ME/mnemo/actions/workflows/release.yml)
+[![CI](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml)
+[![Release](https://github.com/Vesperis-group/mnemo/actions/workflows/release.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/release.yml)
 
-> ⚠️ Les badges ci-dessus pointent vers `REPLACE_ME` : ce sont des **placeholders**
-> à remplacer par le chemin réel du dépôt GitHub (`<USER>/mnemo`).
+> Dépôt officiel : <https://github.com/Vesperis-group/mnemo>
 
 > Navigation et recherche **fuzzy** dans l'historique Bash — un outil maison en
 > **Rust** (CLI + TUI), **local-first**, sans serveur ni cloud.
@@ -38,6 +36,8 @@ commande.
 - [Intégration Bash](#intégration-bash)
 - [Diagnostic : `mnemo doctor`](#diagnostic--mnemo-doctor)
 - [Release v0.1](#release-v01)
+- [Politique de branche](#politique-de-branche)
+- [Pre-commit hooks (à venir)](#pre-commit-hooks-à-venir)
 - [Chemins XDG utilisés](#chemins-xdg-utilisés)
 - [Sécurité & confidentialité](#sécurité--confidentialité)
 - [Architecture & diagrammes](#architecture--diagrammes)
@@ -90,7 +90,7 @@ Touches de la TUI :
 ### Locale (recommandée)
 
 ```bash
-git clone <URL_DU_DEPOT> mnemo
+git clone https://github.com/Vesperis-group/mnemo.git
 cd mnemo
 bash scripts/install.sh
 ```
@@ -112,13 +112,12 @@ MNEMO_ASSUME_YES=1 bash scripts/install.sh   # confirme automatiquement
 MNEMO_NO_BASHRC=1  bash scripts/install.sh   # n'ajoute pas le bloc .bashrc
 ```
 
-### Distante (à venir)
+### Distante
 
-Quand un dépôt GitHub public existera, une installation en une ligne sera
-possible :
+Installation en une ligne depuis le dépôt officiel :
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<USER>/mnemo/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 ```
 
 Le script `install.sh` détecte automatiquement le contexte :
@@ -129,14 +128,14 @@ Le script `install.sh` détecte automatiquement le contexte :
 
 ```bash
 # Fixer explicitement le dépôt à cloner en mode distant :
-MNEMO_REPO_URL=https://github.com/<USER>/mnemo \
-  curl -fsSL https://raw.githubusercontent.com/<USER>/mnemo/main/scripts/install.sh | bash
+MNEMO_REPO_URL="https://github.com/Vesperis-group/mnemo.git" \
+  curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 ```
 
-> ⚠️ **Les URLs ci-dessus sont des placeholders** (`<USER>` / `REPLACE_ME`).
-> Elles devront être adaptées au dépôt réel une fois celui-ci créé. Par défaut,
-> `MNEMO_REPO_URL` vaut `https://github.com/REPLACE_ME/mnemo` et le mode distant
-> refusera de s'exécuter tant que cette valeur n'aura pas été remplacée.
+> ℹ️ Par défaut, `MNEMO_REPO_URL` pointe vers un placeholder
+> (`https://github.com/REPLACE_ME/mnemo`) afin d'éviter tout clonage involontaire.
+> En production, définissez explicitement
+> `MNEMO_REPO_URL="https://github.com/Vesperis-group/mnemo.git"`.
 > N'exécutez jamais un script distant sans avoir vérifié son contenu au préalable.
 
 ---
@@ -359,7 +358,9 @@ des caractères spéciaux).
 
 ## Release v0.1
 
-Le projet est outillé pour une release GitHub automatisée.
+Le projet est outillé pour une release GitHub **automatisée et versionnée** via
+[`release-it`](https://github.com/release-it/release-it). `Cargo.toml` reste la
+**source de vérité** de la version Rust.
 
 ### Intégration continue (`.github/workflows/ci.yml`)
 
@@ -370,34 +371,103 @@ Le projet est outillé pour une release GitHub automatisée.
 - `cargo test` (suite de tests) ;
 - `cargo build --release` (build de release) ;
 - `bash -n` sur `scripts/install.sh`, `scripts/uninstall.sh`,
-  `scripts/lib/bashrc.sh` (vérification de syntaxe).
+  `scripts/lib/bashrc.sh`, `scripts/package-release.sh` (vérification de syntaxe).
 
-### Publication (`.github/workflows/release.yml`)
+### Release automatique (`.github/workflows/release.yml`)
 
-Déclenché par un **tag `v*`**, le workflow :
+Déclenchée par un **push sur `main`** (typiquement le merge d'une PR), elle :
 
-1. compile `mnemo` en release pour Linux `x86_64` ;
-2. crée l'archive `mnemo-linux-x86_64.tar.gz` contenant le binaire `mnemo`,
-   `README.md` et les scripts (`install.sh`, `uninstall.sh`, `lib/bashrc.sh`) ;
-3. génère une somme de contrôle `.sha256` ;
-4. publie le tout dans une **release GitHub**.
+1. exécute le quality gate complet (fmt, clippy, test, build, `bash -n`) ;
+2. lance `release-it`, qui :
+   - lit la version courante depuis `Cargo.toml` (plugin `@release-it/bumper`) ;
+   - calcule l'incrément à partir des *Conventional Commits*
+     (`@release-it/conventional-changelog`) et écrit la nouvelle version dans
+     `Cargo.toml` ;
+   - met à jour `CHANGELOG.md` ;
+   - recompile (`cargo build --release`) puis construit l'archive
+     `mnemo-linux-x86_64.tar.gz` + `.sha256` via `scripts/package-release.sh` ;
+   - commit (`chore: release v${version} [skip ci]`), crée le tag `v${version}`,
+     pousse, et publie la **GitHub Release** avec les artefacts.
 
-### Procédure de release
+> 🔁 **Anti-boucle** : le commit de release contient `[skip ci]`, que GitHub
+> ignore nativement pour les évènements `push`/`pull_request`. Le workflow a en
+> plus une condition `if` de double sécurité.
+
+L'outillage `release-it` ne publie **jamais** sur npm (`npm.publish: false`). Le
+`package.json` est `private` et sert uniquement à fournir l'outil de release.
+
+### Déclencher une release
+
+Le flux normal est : **branche → PR → merge dans `main`** → la release part toute
+seule. Manuellement (dry-run local pour vérifier) :
 
 ```bash
-# 1. S'assurer que la version du Cargo.toml est correcte (ex. 0.1.0)
-#    et que la CI est verte.
-
-# 2. Créer le tag et le pousser :
-git tag v0.1.0
-git push origin v0.1.0
+npm ci
+npm run release:dry      # simulation, n'écrit/ne pousse rien
 ```
 
-Le workflow `release.yml` se déclenche alors automatiquement et publie
-`mnemo-linux-x86_64.tar.gz` dans la release correspondante.
+Pour figer explicitement une première version (au lieu de l'incrément calculé) :
 
-> ℹ️ Les badges et URLs des workflows utilisent `REPLACE_ME` comme placeholder :
-> remplacez-le par le chemin réel du dépôt avant la première release.
+```bash
+npx release-it 0.1.0 --ci --config release-it.json
+```
+
+### Jeton de publication et branche protégée
+
+Si `main` est protégée, le `GITHUB_TOKEN` par défaut peut être **bloqué** pour
+pousser le commit de release. Deux options (voir
+[Politique de branche](#politique-de-branche)) :
+
+- **A.** autoriser le contournement de la protection pour le bot de release
+  uniquement (Rulesets → *Bypass list*) ;
+- **B.** créer un PAT dédié `RELEASE_TOKEN` (scope `repo`) en *secret* du dépôt.
+  Le workflow l'utilise automatiquement s'il existe
+  (`secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN`).
+
+---
+
+## Politique de branche
+
+Le développement direct sur `main` est **interdit par convention** : toute
+modification passe par une **branche dédiée** puis une **Pull Request**.
+
+Le workflow `.github/workflows/branch-policy.yml` fournit un garde-fou
+*best-effort* (rappel/échec côté CI), mais **la vraie protection doit être
+activée dans GitHub** :
+
+`Settings → Rules → Rulesets` (ou `Settings → Branches → Branch protection`) sur
+la cible `main` :
+
+- ✅ **Require a pull request before merging** ;
+- ✅ **Require status checks to pass** (sélectionner les checks `CI`) ;
+- ✅ **Require branches to be up to date before merging** (si souhaité) ;
+- ✅ **Restrict who can push to matching branches** ;
+- ✅ **Include administrators** (si souhaité).
+
+> ⚠️ **Ne pas bloquer le bot de release.** Si `release-it` doit pousser le commit
+> et le tag de release, ajoutez l'acteur (`github-actions[bot]` ou le compte du
+> `RELEASE_TOKEN`) à la *bypass list* du ruleset, ou utilisez l'option B
+> (`RELEASE_TOKEN`). Sinon le push de release échouera sur une branche protégée.
+
+---
+
+## Pre-commit hooks (à venir)
+
+Une configuration [`pre-commit`](https://pre-commit.com/) **optionnelle** est
+fournie (`.pre-commit-config.yaml`). Elle n'est **pas** imposée automatiquement.
+
+Activation manuelle, quand vous le souhaiterez :
+
+```bash
+pipx install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+Hooks prévus : nettoyage des espaces en fin de ligne, *end-of-file-fixer*,
+vérification YAML/TOML, normalisation des fins de ligne, `cargo fmt`,
+`cargo clippy`, et `cargo test` (au `pre-push`). `shellcheck` pourra être ajouté
+plus tard s'il est installé.
 
 ---
 
@@ -468,9 +538,10 @@ src/
 ├── tui.rs        # interface Ratatui + filtre fuzzy partagé
 └── shell.rs      # génération du snippet Bash + helpers .bashrc
 scripts/
-├── install.sh    # installation
-├── uninstall.sh  # désinstallation
-└── lib/bashrc.sh # logique .bashrc partagée (et testée)
+├── install.sh         # installation (locale ou distante)
+├── uninstall.sh       # désinstallation
+├── package-release.sh # construction de l'archive de release
+└── lib/bashrc.sh      # logique .bashrc partagée (et testée)
 ```
 
 ### Architecture globale

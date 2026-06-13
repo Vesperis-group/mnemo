@@ -1,0 +1,15 @@
+{
+  "name": "mnemo-release-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Outillage de release (release-it) pour le projet Rust mnemo. Aucune publication npm.",
+  "scripts": {
+    "release": "release-it --ci --config release-it.json",
+    "release:dry": "release-it --dry-run --config release-it.json"
+  },
+  "devDependencies": {
+    "@release-it/bumper": "7.0.6",
+    "@release-it/conventional-changelog": "11.0.1",
+    "release-it": "20.2.0"
+  }
+}

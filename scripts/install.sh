@@ -12,10 +12,10 @@
 #   MNEMO_ASSUME_YES=1 bash scripts/install.sh      # non interactif (CI)
 #   MNEMO_NO_BASHRC=1 bash scripts/install.sh        # n'ajoute pas le bloc .bashrc
 #
-# Installation distante (quand le dépôt GitHub existera) :
-#   curl -fsSL https://raw.githubusercontent.com/<USER>/mnemo/main/scripts/install.sh | bash
+# Installation distante depuis le dépôt officiel :
+#   curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 #   # ou en fixant explicitement l'URL du dépôt :
-#   MNEMO_REPO_URL=https://github.com/<USER>/mnemo curl -fsSL .../install.sh | bash
+#   MNEMO_REPO_URL="https://github.com/Vesperis-group/mnemo.git" curl -fsSL .../install.sh | bash
 
 set -euo pipefail
 
@@ -54,7 +54,7 @@ detect_project_dir() {
     if [ "${MNEMO_REPO_URL}" = "https://github.com/REPLACE_ME/mnemo" ]; then
         warn "Installation distante détectée mais MNEMO_REPO_URL n'est pas configuré."
         warn "Définissez l'URL du dépôt, par exemple :"
-        warn "  MNEMO_REPO_URL=https://github.com/<USER>/mnemo bash install.sh"
+        warn "  MNEMO_REPO_URL=https://github.com/Vesperis-group/mnemo.git bash install.sh"
         exit 1
     fi
     if ! command -v git >/dev/null 2>&1; then

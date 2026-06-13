@@ -1,0 +1,49 @@
+{
+  "git": {
+    "commitMessage": "chore: release v${version} [skip ci]",
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}",
+    "requireBranch": "main",
+    "requireCleanWorkingDir": true,
+    "requireUpstream": false,
+    "addUntrackedFiles": false,
+    "commit": true,
+    "tag": true,
+    "push": true
+  },
+  "github": {
+    "release": true,
+    "releaseName": "mnemo v${version}",
+    "autoGenerate": false,
+    "assets": [
+      "mnemo-linux-x86_64.tar.gz",
+      "mnemo-linux-x86_64.tar.gz.sha256"
+    ]
+  },
+  "npm": {
+    "publish": false,
+    "ignoreVersion": true
+  },
+  "hooks": {
+    "after:bump": "cargo build --release && bash scripts/package-release.sh"
+  },
+  "plugins": {
+    "@release-it/bumper": {
+      "in": {
+        "file": "Cargo.toml",
+        "path": "package.version"
+      },
+      "out": {
+        "file": "Cargo.toml",
+        "path": "package.version"
+      }
+    },
+    "@release-it/conventional-changelog": {
+      "infile": "CHANGELOG.md",
+      "header": "# Changelog\n",
+      "preset": {
+        "name": "conventionalcommits"
+      }
+    }
+  }
+}

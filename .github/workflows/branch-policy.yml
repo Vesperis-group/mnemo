@@ -1,0 +1,48 @@
+name: Branch policy
+
+# Garde-fou « best-effort » côté CI pour rappeler le flux de contribution.
+#
+# ⚠️ Ceci ne remplace PAS la vraie protection de branche. La protection
+# effective de `main` doit être configurée dans GitHub :
+#   Settings → Rules → Rulesets  (ou Settings → Branches → Branch protection)
+# Voir la section « Politique de branche » du README.
+#
+# Ce workflow :
+#   - sur pull_request : vérifie que la PR ne provient pas directement de `main`.
+#   - sur push direct sur `main` (hors commit de release) : journalise un
+#     avertissement pour signaler un contournement du flux PR.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check-pull-request:
+    name: Vérification du flux PR
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: La PR doit venir d'une branche dédiée
+        run: |
+          head="${{ github.head_ref }}"
+          echo "Branche source : ${head}"
+          if [ "${head}" = "main" ] || [ "${head}" = "master" ]; then
+            echo "::error::Une PR ne doit pas provenir de '${head}'. Créez une branche dédiée (ex. feature/xxx)."
+            exit 1
+          fi
+          echo "::notice::Flux PR conforme."
+
+  warn-direct-push:
+    name: Avertissement push direct
+    if: ${{ github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rappel du flux de contribution
+        run: |
+          echo "::warning::Push détecté sur 'main'. Le développement direct sur 'main' est déconseillé."
+          echo "::warning::Activez une vraie protection de branche (Rulesets) pour l'imposer. Voir le README."
