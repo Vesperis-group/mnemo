@@ -1,0 +1,10 @@
+/home/killian/mnemo/target/debug/deps/linux_raw_sys-7512e28f7b74ab46.d: /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/lib.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/elf.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/auxvec.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/errno.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/general.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/ioctl.rs
+
+/home/killian/mnemo/target/debug/deps/liblinux_raw_sys-7512e28f7b74ab46.rmeta: /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/lib.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/elf.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/auxvec.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/errno.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/general.rs /home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/ioctl.rs
+
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/lib.rs:
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/elf.rs:
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/auxvec.rs:
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/errno.rs:
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/general.rs:
+/home/killian/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/linux-raw-sys-0.12.1/src/x86_64/ioctl.rs:

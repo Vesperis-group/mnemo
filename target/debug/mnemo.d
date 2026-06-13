@@ -1,0 +1,1 @@
+/home/killian/mnemo/target/debug/mnemo: /home/killian/mnemo/src/cli.rs /home/killian/mnemo/src/config.rs /home/killian/mnemo/src/db.rs /home/killian/mnemo/src/doctor.rs /home/killian/mnemo/src/filter.rs /home/killian/mnemo/src/importer.rs /home/killian/mnemo/src/main.rs /home/killian/mnemo/src/shell.rs /home/killian/mnemo/src/tui.rs /home/killian/mnemo/src/version.rs
