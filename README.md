@@ -87,56 +87,70 @@ Touches de la TUI :
 
 ## Installation rapide
 
-### Locale (recommandée)
+### Distante (recommandée)
 
-```bash
-git clone https://github.com/Vesperis-group/mnemo.git
-cd mnemo
-bash scripts/install.sh
-```
-
-Le script :
-
-1. compile en release (`cargo build --release`) ;
-2. installe le binaire dans `~/.local/bin/mnemo` (créé si absent) ;
-3. vérifie que `~/.local/bin` est dans le `PATH` ;
-4. lance `mnemo init` ;
-5. **propose** d'ajouter l'intégration Bash à `~/.bashrc` (avec sauvegarde et
-   anti-doublon) ;
-6. affiche un résumé des prochaines étapes.
-
-Mode non interactif (utile en CI) :
-
-```bash
-MNEMO_ASSUME_YES=1 bash scripts/install.sh   # confirme automatiquement
-MNEMO_NO_BASHRC=1  bash scripts/install.sh   # n'ajoute pas le bloc .bashrc
-```
-
-### Distante
-
-Installation en une ligne depuis le dépôt officiel :
+Installe la **dernière release** en téléchargeant un binaire pré-compilé (aucune
+toolchain Rust requise). Par défaut : binaire **musl statique**, le plus
+compatible.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 ```
 
-Le script `install.sh` détecte automatiquement le contexte :
+Le script :
 
-- **mode local** : lancé depuis un dépôt cloné, il compile les sources présentes ;
-- **mode distant** : lancé via `curl ... | bash`, il clone le dépôt indiqué par
-  la variable `MNEMO_REPO_URL` puis compile.
+1. détecte l'architecture (`uname -m`) et choisit l'asset adapté ;
+2. télécharge l'archive `.tar.gz` **et** son `.sha256` ;
+3. **vérifie l'intégrité** (SHA-256) avant toute installation ;
+4. installe le binaire dans `~/.local/bin/mnemo` (créé si absent) ;
+5. vérifie que `~/.local/bin` est dans le `PATH` ;
+6. lance `mnemo init` ;
+7. **propose** d'ajouter l'intégration Bash à `~/.bashrc` (sauvegarde +
+   anti-doublon) ;
+8. affiche un résumé des prochaines étapes.
+
+Choisir une **version précise** :
 
 ```bash
-# Fixer explicitement le dépôt à cloner en mode distant :
-MNEMO_REPO_URL="https://github.com/Vesperis-group/mnemo.git" \
-  curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
+MNEMO_VERSION="v0.1.2" \
+  bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)
 ```
 
-> ℹ️ Par défaut, `MNEMO_REPO_URL` pointe vers un placeholder
-> (`https://github.com/REPLACE_ME/mnemo`) afin d'éviter tout clonage involontaire.
-> En production, définissez explicitement
-> `MNEMO_REPO_URL="https://github.com/Vesperis-group/mnemo.git"`.
-> N'exécutez jamais un script distant sans avoir vérifié son contenu au préalable.
+Choisir une **cible précise** (musl statique, ou GNU/glibc 2.35) :
+
+```bash
+MNEMO_TARGET="x86_64-unknown-linux-gnu-glibc2.35" \
+  bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)
+```
+
+Mode non interactif (utile en CI) :
+
+```bash
+MNEMO_ASSUME_YES=1 ... bash ...   # confirme automatiquement
+MNEMO_NO_BASHRC=1  ... bash ...   # n'ajoute pas le bloc .bashrc
+```
+
+### Cibles Linux disponibles
+
+| Asset | Cas d'usage |
+| --- | --- |
+| `x86_64-unknown-linux-musl` | **Recommandé.** Binaire **statique**, compatible avec quasiment toutes les distributions (pas de dépendance à la glibc du système). |
+| `x86_64-unknown-linux-gnu-glibc2.35` | Binaire GNU construit sur Ubuntu 22.04, pour les environnements glibc **≥ 2.35**. |
+
+> 🧱 Les variantes `aarch64-unknown-linux-*` pourront être ajoutées
+> ultérieurement (cross-compilation).
+
+### Depuis les sources (locale)
+
+```bash
+git clone https://github.com/Vesperis-group/mnemo.git
+cd mnemo
+bash scripts/install.sh                       # télécharge la release
+MNEMO_INSTALL_FROM_SOURCE=1 bash scripts/install.sh   # compile localement
+```
+
+Le repli `MNEMO_INSTALL_FROM_SOURCE=1` compile depuis le dépôt cloné (ou clone
+`MNEMO_REPO_URL` si les sources sont absentes) au lieu de télécharger un asset.
 
 ---
 
@@ -375,23 +389,45 @@ Le projet est outillé pour une release GitHub **automatisée et versionnée** v
 
 ### Release automatique (`.github/workflows/release.yml`)
 
-Déclenchée par un **push sur `main`** (typiquement le merge d'une PR), elle :
+Déclenchée par un **push sur `main`** (typiquement le merge d'une PR), sur un
+runner **`ubuntu-22.04`** (Linux uniquement), elle :
 
-1. exécute le quality gate complet (fmt, clippy, test, build, `bash -n`) ;
+1. exécute le quality gate complet (fmt, clippy, test, build GNU + musl,
+   inspection `file`/`ldd`, `bash -n`) ;
 2. lance `release-it`, qui :
    - lit la version courante depuis `Cargo.toml` (plugin `@release-it/bumper`) ;
    - calcule l'incrément à partir des *Conventional Commits*
      (`@release-it/conventional-changelog`) et écrit la nouvelle version dans
      `Cargo.toml` ;
    - met à jour `CHANGELOG.md` ;
-   - recompile (`cargo build --release`) puis construit l'archive
-     `mnemo-linux-x86_64.tar.gz` + `.sha256` via `scripts/package-release.sh` ;
+   - via le hook `after:bump`, **recompile après le bump** (pour que
+     `mnemo version` reporte la bonne version) les **deux cibles Linux** et
+     construit, pour chacune, une archive `.tar.gz` + `.sha256` via
+     `scripts/package-release.sh` ;
    - commit (`chore: release v${version} [skip ci]`), crée le tag `v${version}`,
-     pousse, et publie la **GitHub Release** avec les artefacts.
+     pousse, et publie la **GitHub Release** avec **tous** les artefacts (glob
+     `mnemo-v*-linux-*.tar.gz` + `.sha256`).
+
+Assets produits pour `v${version}` :
+
+```
+mnemo-v${version}-x86_64-unknown-linux-musl.tar.gz
+mnemo-v${version}-x86_64-unknown-linux-musl.tar.gz.sha256
+mnemo-v${version}-x86_64-unknown-linux-gnu-glibc2.35.tar.gz
+mnemo-v${version}-x86_64-unknown-linux-gnu-glibc2.35.tar.gz.sha256
+```
+
+Chaque archive contient : `mnemo`, `README.md`, `scripts/install.sh`,
+`scripts/uninstall.sh`, `scripts/lib/bashrc.sh`.
 
 > 🔁 **Anti-boucle** : le commit de release contient `[skip ci]`, que GitHub
 > ignore nativement pour les évènements `push`/`pull_request`. Le workflow a en
 > plus une condition `if` de double sécurité.
+
+> 🧱 **Pourquoi un seul job ?** release-it crée la Release *et* attache les
+> assets de façon atomique. Construire les deux cibles x86_64 dans un job unique
+> (ubuntu-22.04) évite les courses entre jobs et reste simple. L'ajout futur
+> d'`aarch64` se fera en étendant les cibles du hook `after:bump`.
 
 L'outillage `release-it` ne publie **jamais** sur npm (`npm.publish: false`). Le
 `package.json` est `private` et sert uniquement à fournir l'outil de release.
@@ -735,6 +771,20 @@ flowchart TD
 export PATH="$HOME/.local/bin:$PATH"
 ```
 puis `source ~/.bashrc`.
+
+**`version GLIBC_2.39 not found` (Ubuntu 22.04 / WSL / distribution plus ancienne)**
+Le binaire GNU est lié à la glibc de la machine de build. Un binaire construit
+sur une distribution récente exige une glibc récente.
+Solutions :
+- utilisez une release **`v0.1.2`+** ;
+- préférez l'asset **`x86_64-unknown-linux-musl`** (statique, sans dépendance à
+  la glibc) — c'est le **choix par défaut** de l'installateur :
+  ```bash
+  MNEMO_TARGET="x86_64-unknown-linux-musl" \
+    bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)
+  ```
+- si vous tenez au binaire GNU, prenez `x86_64-unknown-linux-gnu-glibc2.35`
+  (construit sur Ubuntu 22.04, compatible glibc ≥ 2.35).
 
 **`Aucune commande enregistrée. Lancez mnemo import d'abord.`**
 La base est vide. Lancez `mnemo import` ou exécutez quelques commandes après

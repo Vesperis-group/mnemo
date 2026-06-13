@@ -5,9 +5,9 @@
 /node_modules/
 
 # Artefacts de release générés localement / en CI
-/mnemo-linux-x86_64/
-/mnemo-linux-x86_64.tar.gz
-/mnemo-linux-x86_64.tar.gz.sha256
+/mnemo-v*-linux-*/
+/mnemo-v*-linux-*.tar.gz
+/mnemo-v*-linux-*.tar.gz.sha256
 
 # Divers
 *.log
