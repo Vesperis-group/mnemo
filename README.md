@@ -230,7 +230,7 @@ make uninstall
 | `mnemo search <requête> [--project <nom>] [--branch <branche>]` | Filtre par contexte Git (projet / branche), compatible avec `--print` et la TUI. |
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
-| `mnemo stats` | Affiche des statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets). |
+| `mnemo stats [--project <nom>] [--branch <branche>] [--json]` | Statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets), filtrables et exportables en JSON. |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
 
@@ -249,8 +249,70 @@ mnemo search docker --project mnemo
 mnemo search cargo --branch main
 mnemo search --print --project mnemo
 
-# Statistiques d'usage
+# Statistiques d'usage (texte)
 mnemo stats
+
+# Statistiques filtrées par projet / branche
+mnemo stats --project mnemo
+mnemo stats --branch main
+mnemo stats --project mnemo --branch main
+
+# Statistiques au format JSON (scripts / CI)
+mnemo stats --json
+```
+
+#### Normalisation des « Top commandes »
+
+Le « Top commandes » compte le **programme réellement invoqué**, pas le premier
+mot brut de la ligne. La normalisation :
+
+- ignore les lignes vides, les commentaires (`# …`) et les tokens parasites
+  (`-`, `|`, `&&`, `;`, `then`, `fi`, `done`, `function`…) ;
+- retire les affectations de variables en tête
+  (`RUST_LOG=debug cargo test` → `cargo`) ;
+- traverse les wrappers `sudo`, `env`, `command`, `builtin`, `exec`, `time`,
+  `nohup` (`sudo -E apt update` → `apt`, `time cargo test` → `cargo`) ;
+- réduit les chemins au binaire (`/usr/bin/git status` → `git`,
+  `./target/release/mnemo doctor` → `mnemo`).
+
+Les entrées écartées sont comptées et affichées :
+`Entrées ignorées dans le Top commandes : X`.
+
+Exemple de sortie nettoyée :
+
+```text
+Top commandes :
+      5  echo
+      3  cargo
+      2  apt
+      2  git
+      1  docker
+      1  kubectl
+      1  npm
+      1  npx
+  Entrées ignorées dans le Top commandes : 4
+```
+
+Exemple `mnemo stats --json` :
+
+```json
+{
+  "total_commands": 1166,
+  "git_projects": 1,
+  "failed_commands": 0,
+  "ignored_for_top_commands": 192,
+  "filters": { "project": "mnemo", "branch": null },
+  "top_commands": [
+    { "name": "cargo", "count": 12 },
+    { "name": "git", "count": 8 }
+  ],
+  "top_directories": [
+    { "path": "/home/killian/mnemo", "count": 5 }
+  ],
+  "top_projects": [
+    { "name": "mnemo", "count": 3 }
+  ]
+}
 ```
 
 Le schéma SQLite est versionné (`PRAGMA user_version`). Les bases existantes sont

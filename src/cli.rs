@@ -66,7 +66,17 @@ pub enum Command {
     Migrate,
 
     /// Affiche des statistiques d'usage (texte simple).
-    Stats,
+    Stats {
+        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
+        /// Produit une sortie JSON exploitable.
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Diagnostique l'installation locale de mnemo.
     Doctor {

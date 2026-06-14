@@ -200,15 +200,22 @@ pub fn fetch_filtered(
     Ok(out)
 }
 
-/// Charge toutes les commandes (sans limite), pour le calcul des statistiques.
-pub fn all_commands(conn: &Connection) -> Result<Vec<CommandRecord>> {
+/// Charge toutes les commandes correspondant au filtre Git (sans limite), pour
+/// le calcul des statistiques. Un filtre vide renvoie l'intégralité de la base.
+pub fn all_commands(conn: &Connection, filter: &SearchFilter) -> Result<Vec<CommandRecord>> {
+    let project_suffix = filter.project.as_ref().map(|p| format!("%/{p}"));
     let mut stmt = conn.prepare(
         "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
                 git_root, git_branch, git_remote, session_id
          FROM commands
+         WHERE (?1 IS NULL OR git_branch = ?1)
+           AND (?2 IS NULL OR git_root = ?2 OR git_root LIKE ?3)
          ORDER BY created_at DESC, id DESC",
     )?;
-    let rows = stmt.query_map([], row_to_record)?;
+    let rows = stmt.query_map(
+        rusqlite::params![filter.branch, filter.project, project_suffix],
+        row_to_record,
+    )?;
     let mut out = Vec::new();
     for row in rows {
         out.push(row?);
