@@ -1,11 +1,16 @@
+mod backup;
 mod cli;
 mod config;
+mod confirm;
 mod db;
 mod doctor;
+mod export;
 mod filter;
 mod gitctx;
 mod importer;
+mod list;
 mod migrations;
+mod prune;
 mod shell;
 mod stats;
 mod tui;
@@ -49,6 +54,32 @@ fn main() -> Result<()> {
             std::process::exit(code);
         }
         Command::Config { action } => cmd_config(action),
+        Command::Backup { output, json } => backup::run(output, json),
+        Command::Restore {
+            archive,
+            dry_run,
+            yes,
+        } => backup::restore_run(&archive, dry_run, yes),
+        Command::Export {
+            format,
+            project,
+            branch,
+            output,
+        } => export::run(format, project, branch, output),
+        Command::List {
+            limit,
+            project,
+            branch,
+            json,
+        } => list::run(limit, project, branch, json),
+        Command::Delete { id, dry_run, yes } => prune::delete_run(id, dry_run, yes),
+        Command::Prune {
+            older_than,
+            project,
+            branch,
+            dry_run,
+            yes,
+        } => prune::prune_run(older_than, project, branch, dry_run, yes),
         Command::Version => {
             version::run();
             Ok(())

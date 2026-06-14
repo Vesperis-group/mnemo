@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+use crate::export::ExportFormat;
+
 #[derive(Parser, Debug)]
 #[command(
     name = "mnemo",
@@ -92,6 +94,91 @@ pub enum Command {
     Config {
         #[command(subcommand)]
         action: ConfigCommand,
+    },
+
+    /// Crée une sauvegarde locale complète (archive .tar.gz).
+    Backup {
+        /// Dossier de destination (défaut : ~/.local/share/mnemo/backups/).
+        #[arg(long, value_name = "DOSSIER")]
+        output: Option<PathBuf>,
+        /// Produit une sortie JSON exploitable.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Restaure une sauvegarde (.tar.gz) après vérification.
+    Restore {
+        /// Chemin de l'archive de sauvegarde.
+        archive: PathBuf,
+        /// Montre ce qui serait fait sans rien modifier.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme la restauration sans question interactive.
+        #[arg(long)]
+        yes: bool,
+    },
+
+    /// Exporte les commandes en JSON ou CSV.
+    Export {
+        /// Format de sortie.
+        #[arg(long, value_enum)]
+        format: ExportFormat,
+        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
+        /// Fichier de sortie (défaut : stdout).
+        #[arg(long, value_name = "FICHIER")]
+        output: Option<PathBuf>,
+    },
+
+    /// Affiche les dernières commandes avec leurs IDs.
+    List {
+        /// Nombre de commandes affichées (défaut : 20).
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
+        /// Produit une sortie JSON exploitable.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Supprime une commande par son ID (après confirmation).
+    Delete {
+        /// Identifiant de la commande à supprimer.
+        id: i64,
+        /// Montre la commande ciblée sans la supprimer.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme la suppression sans question interactive.
+        #[arg(long)]
+        yes: bool,
+    },
+
+    /// Nettoie les commandes plus anciennes qu'une durée donnée.
+    Prune {
+        /// Durée d'ancienneté (ex : 30d, 12w, 6m, 1y).
+        #[arg(long = "older-than", value_name = "DURÉE")]
+        older_than: String,
+        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
+        /// Montre ce qui serait supprimé sans rien modifier.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme le nettoyage sans question interactive.
+        #[arg(long)]
+        yes: bool,
     },
 
     /// Affiche des informations détaillées de version et de build.

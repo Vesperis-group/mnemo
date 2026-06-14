@@ -232,6 +232,12 @@ make uninstall
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
 | `mnemo stats [--project <nom>] [--branch <branche>] [--json]` | Statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets), filtrables et exportables en JSON. |
 | `mnemo config stats-ignore <add\|remove\|list> [<cmd>]` | Gère les commandes exclues du « Top commandes » dans `mnemo stats`. |
+| `mnemo list [--limit N] [--project <nom>] [--branch <branche>] [--json]` | Affiche les dernières commandes avec leurs IDs (utile pour `mnemo delete`). |
+| `mnemo backup [--output <dossier>] [--json]` | Crée une sauvegarde locale complète (`.tar.gz`). |
+| `mnemo restore <archive> [--dry-run] [--yes]` | Restaure une sauvegarde après vérification, avec backup de sécurité. |
+| `mnemo export --format <json\|csv> [--project <nom>] [--branch <branche>] [--output <fichier>]` | Exporte les commandes (stdout par défaut). |
+| `mnemo delete <id> [--dry-run] [--yes]` | Supprime une commande par ID (confirmation + backup automatique). |
+| `mnemo prune --older-than <durée> [--project <nom>] [--branch <branche>] [--dry-run] [--yes]` | Nettoie les commandes anciennes (`30d`, `12w`, `6m`, `1y`). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
 
@@ -351,6 +357,96 @@ Le schéma SQLite est versionné (`PRAGMA user_version`). Les bases existantes s
 migrées automatiquement et **sans perte** au premier usage ; `mnemo migrate`
 permet de déclencher la migration explicitement, et `mnemo doctor` affiche la
 version de schéma courante / attendue.
+
+
+---
+
+## Gestion des données
+
+mnemo fournit des commandes sûres pour **sauvegarder, restaurer, exporter et
+nettoyer** l'historique. Toutes les données restent **locales** (aucun cloud,
+aucune synchronisation) : la base SQLite et la configuration ne quittent jamais
+la machine.
+
+### Garanties de sécurité
+
+Toute opération destructive (`delete`, `prune`, `restore`) respecte les mêmes
+règles :
+
+- **`--dry-run`** : affiche ce qui serait touché sans rien modifier ;
+- **aperçu systématique** : la (les) commande(s) concernée(s) sont affichées
+  avant action ;
+- **confirmation obligatoire** : sans `--yes`, une confirmation interactive est
+  demandée. En mode **non interactif** (script, pipe), l'opération est
+  **refusée** sans `--yes` — jamais de suppression silencieuse ;
+- **sauvegarde automatique** : un backup complet est créé avant toute
+  suppression ou restauration réelle ;
+- **transactions SQLite** pour `delete` / `prune` / `restore`.
+
+### Sauvegarde et restauration
+
+```bash
+mnemo backup                       # archive dans ~/.local/share/mnemo/backups/
+mnemo backup --output ~/backups    # dossier de destination personnalisé
+mnemo backup --json                # sortie JSON (chemin + métadonnées)
+
+mnemo restore ./mnemo-backup-YYYYMMDD-HHMMSS.tar.gz --dry-run
+mnemo restore ./mnemo-backup-YYYYMMDD-HHMMSS.tar.gz          # confirmation interactive
+mnemo restore ./mnemo-backup-YYYYMMDD-HHMMSS.tar.gz --yes    # sans question
+```
+
+Une sauvegarde est une archive `.tar.gz` autonome contenant `history.db`,
+`config.toml` et un `metadata.json` (version mnemo, date ISO, chemins, taille
+de la base, nombre de commandes, version de schéma). La restauration **valide**
+l'archive (base ouvrable, table `commands`, version de schéma compatible) et
+**crée d'abord un backup de l'état courant** avant de remplacer la base et la
+config.
+
+### Export
+
+```bash
+mnemo export --format json
+mnemo export --format csv
+mnemo export --format json --output ./mnemo-export.json
+mnemo export --project mnemo --format json
+mnemo export --branch main --format csv
+```
+
+L'export JSON produit un tableau d'objets (tous les champs : `id`, `command`,
+`cwd`, `shell`, `hostname`, `exit_code`, `created_at`, `git_root`, `git_branch`,
+`git_remote`, `session_id`). L'export CSV respecte la RFC 4180 (échappement des
+virgules, guillemets et sauts de ligne). Sans `--output`, l'export va sur
+stdout. Les filtres `--project` / `--branch` s'appliquent comme pour `search`.
+
+### Lister et supprimer
+
+```bash
+mnemo list                  # 20 dernières commandes avec leurs IDs
+mnemo list --limit 20
+mnemo list --project mnemo
+mnemo list --branch main
+mnemo list --json
+
+mnemo delete 123 --dry-run  # montre la commande sans la supprimer
+mnemo delete 123            # confirmation interactive + backup automatique
+mnemo delete 123 --yes      # suppression directe
+```
+
+`mnemo list` affiche `id`, date courte, projet/dossier, `exit_code` et la
+commande — pratique pour repérer l'ID à passer à `mnemo delete`.
+
+### Nettoyage par ancienneté
+
+```bash
+mnemo prune --older-than 180d --dry-run
+mnemo prune --older-than 30d --yes
+mnemo prune --project mnemo --older-than 90d --dry-run
+```
+
+Durées acceptées : `30d` (jours), `12w` (semaines), `6m` (mois ≈ 30 jours),
+`1y` (année ≈ 365 jours). En `--dry-run`, mnemo affiche le nombre d'entrées
+concernées et quelques exemples. Les filtres `--project` / `--branch` sont
+respectés. Un backup automatique est créé avant toute suppression réelle.
 
 
 ---
