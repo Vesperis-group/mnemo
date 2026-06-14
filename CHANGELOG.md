@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.9.2](https://github.com/Vesperis-group/mnemo/compare/v0.9.1...v0.9.2) (2026-06-14)
+
+### Bug Fixes
+
+* corrige les permissions des backups existants ([515e5b5](https://github.com/Vesperis-group/mnemo/commit/515e5b5b5e57ee83a47c17e40870dcf51e33294b))
+
 ## [0.9.1](https://github.com/Vesperis-group/mnemo/compare/v0.9.0...v0.9.1) (2026-06-14)
 
 ### Bug Fixes
