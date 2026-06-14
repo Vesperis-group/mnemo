@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [1.0.0](https://github.com/Vesperis-group/mnemo/compare/v0.10.5...v1.0.0) (2026-06-14)
+
+### ⚠ BREAKING CHANGES
+
+* stabilisation de la CLI, des formats documentés et de la politique de compatibilité pour la v1.
+
+### Features
+
+* stabilise mnemo pour la v1 ([f1df751](https://github.com/Vesperis-group/mnemo/commit/f1df751f0618369e45e3b7ada4bc163aa943dc65))
+
 ## [0.10.5](https://github.com/Vesperis-group/mnemo/compare/v0.10.4...v0.10.5) (2026-06-14)
 
 ## [0.10.4](https://github.com/Vesperis-group/mnemo/compare/v0.10.3...v0.10.4) (2026-06-14)
