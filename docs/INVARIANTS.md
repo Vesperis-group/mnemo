@@ -123,3 +123,47 @@ adossé à des tests automatisés (référencés entre parenthèses).
     `*-checksums.txt` agrège les empreintes de tous les assets, vérifié avant
     signature.
     (`scripts/{package-release,generate-sbom,checksums-release}.sh`)
+
+## Vérification de signature côté client (v0.8)
+
+> Le SHA-256 reste l'invariant **bloquant** de référence (invariant 8). La
+> vérification Sigstore est une défense en profondeur additionnelle ; elle ne
+> s'exécute **jamais** avant que le SHA-256 ait été validé.
+
+20. **Le SHA-256 est vérifié avant toute étape de signature.**
+    Si l'empreinte SHA-256 est invalide, l'installation échoue **avant** que la
+    moindre vérification Sigstore ne soit tentée ; aucun message de signature
+    n'est émis.
+    (`tests/v5_lifecycle.rs::upgrade_signature_ignoree_si_sha_invalide`)
+
+21. **Une signature présente mais invalide refuse toujours l'installation.**
+    Quel que soit le mode (best-effort ou strict), si `cosign` est disponible et
+    que la vérification du bundle Sigstore échoue, `upgrade` et `install.sh`
+    refusent l'installation et laissent le binaire en place intact.
+    (`tests/v5_lifecycle.rs::upgrade_signature_invalide_refuse`,
+    `tests/scripts.rs::install_signature_invalide_refuse`)
+
+22. **Mode best-effort : `cosign` absent ne bloque pas, mais avertit.**
+    Par défaut, si `cosign` est absent ou si le bundle de signature est
+    indisponible, l'installation continue (le SHA-256 ayant déjà été vérifié)
+    après un avertissement explicite. `cosign` n'est jamais téléchargé
+    automatiquement.
+    (`tests/v5_lifecycle.rs::upgrade_sans_strict_continue_si_cosign_absent`,
+    `tests/scripts.rs::install_signature_non_stricte_continue_si_cosign_absent`)
+
+23. **Mode strict : aucune installation sans signature vérifiée.**
+    Avec `mnemo upgrade --require-signature` ou `MNEMO_REQUIRE_SIGNATURE=1` pour
+    `install.sh`, l'installation est **refusée** si `cosign` est absent, si le
+    bundle est indisponible, ou si la signature est invalide. `update --upgrade`
+    transmet le drapeau `--require-signature` à `upgrade`.
+    (`tests/v5_lifecycle.rs::{upgrade_require_signature_refuse_si_cosign_absent,
+    upgrade_strict_refuse_si_bundle_indisponible,
+    update_upgrade_require_signature_transmet_le_flag}`,
+    `tests/scripts.rs::{install_signature_stricte_refuse_si_cosign_absent,
+    install_signature_stricte_refuse_si_bundle_indisponible}`)
+
+24. **La provenance SLSA n'est pas vérifiée automatiquement.**
+    En v0.8, seul le bundle de **signature** de l'archive (`*.sigstore.json`)
+    est contrôlé côté client. La vérification de la provenance
+    (`*.provenance.sigstore.json`) reste **manuelle** (documentée dans le
+    README).

@@ -209,6 +209,8 @@ pub enum Command {
     /// interactif (CI, script, cron, pipe), reste une simple vérification.
     /// `--upgrade` enchaîne directement l'installation quand une mise à jour est
     /// disponible ; combiné à `--yes`, il permet un upgrade automatisé.
+    /// `--require-signature` rend la vérification Sigstore (cosign) obligatoire
+    /// lors de l'upgrade enchaîné.
     Update {
         /// Sortie au format JSON (vérification seule, sans proposition).
         #[arg(long)]
@@ -219,6 +221,9 @@ pub enum Command {
         /// Avec `--upgrade`, installe sans confirmation interactive.
         #[arg(long)]
         yes: bool,
+        /// Avec `--upgrade`, exige une signature Sigstore valide (cosign).
+        #[arg(long = "require-signature")]
+        require_signature: bool,
     },
 
     /// Télécharge et installe la dernière version stable (remplace le binaire).
@@ -235,6 +240,9 @@ pub enum Command {
         /// Force un triplet cible (ex : aarch64-unknown-linux-musl).
         #[arg(long, value_name = "CIBLE")]
         target: Option<String>,
+        /// Exige une signature Sigstore valide (cosign requis) avant d'installer.
+        #[arg(long = "require-signature")]
+        require_signature: bool,
     },
 
     /// Désinstalle mnemo : binaire + intégration shell. Conserve les données.

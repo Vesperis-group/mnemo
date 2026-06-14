@@ -28,7 +28,7 @@ env:
 # La version exacte de Rust est figée par rust-toolchain.toml et installée par
 # le rustup pré-présent sur le runner (pas de canal flottant « stable », pas
 # d'action tierce pour la toolchain). Runner épinglé sur ubuntu-24.04 (image
-# GitHub maintenue, moins flottante que « ubuntu-latest » — mais pas immuable
+# GitHub maintenue, moins flottante que « ubuntu-latest » - mais pas immuable
 # au digest, cf. docs/THREAT_MODEL.md).
 # ---------------------------------------------------------------------------
 

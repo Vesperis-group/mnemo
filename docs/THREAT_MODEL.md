@@ -56,14 +56,26 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 
 ### M4 - Mise à niveau corrompue / downgrade
 - **Menace** : asset de release tronqué, altéré, ou substitué.
-- **Mitigations** : vérification **SHA-256** de l'archive **avant** extraction ;
-  HTTPS obligatoire ; le nouveau binaire est testé (`--version`) avant
-  remplacement **atomique** ; sauvegarde des données avant bascule ; en cas
+- **Mitigations** : vérification **SHA-256** de l'archive **avant** extraction
+  (toujours obligatoire et bloquante) ; **vérification de la signature Sigstore**
+  de l'archive (`cosign verify-blob`) lorsque `cosign` est présent, en défense en
+  profondeur ; HTTPS obligatoire ; le nouveau binaire est testé (`--version`)
+  avant remplacement **atomique** ; sauvegarde des données avant bascule ; en cas
   d'échec, le binaire en place reste intact.
+- **Modes de vérification de signature (v0.8)** :
+  - *best-effort* (défaut) : si `cosign` est absent ou si le bundle est
+    indisponible, l'opération continue après avertissement, le SHA-256 étant déjà
+    garanti. Une signature **invalide** refuse toujours l'installation.
+  - *strict* (`mnemo upgrade --require-signature`, `MNEMO_REQUIRE_SIGNATURE=1`
+    pour `install.sh`) : l'installation est refusée si la signature ne peut pas
+    être vérifiée (cosign absent, bundle manquant, signature invalide).
 - **Risque résiduel** : confiance dans le `.sha256` publié par la release
-  GitHub (même origine que l'asset). Pas de signature GPG des binaires
-  (décision local-first, voir §5) - un compromis de l'organisation GitHub
-  resterait hors de portée de cette mitigation.
+  GitHub (même origine que l'asset). En mode best-effort, l'absence de `cosign`
+  réduit la mise à niveau au seul contrôle SHA-256 (pas de vérification
+  cryptographique d'origine) ; le mode strict élimine ce risque au prix d'une
+  dépendance à `cosign`. La **provenance SLSA** n'est pas vérifiée
+  automatiquement côté client (vérification manuelle documentée). Un compromis de
+  l'organisation GitHub resterait hors de portée de ces mitigations.
 
 ### M5 - SHA invalide / format `.sha256` inattendu
 - **Menace** : fichier `.sha256` mal formé ou condensat erroné.
@@ -112,10 +124,15 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   restent sur la machine.
 - **Sauvegarde avant destruction** : choix systématique privilégiant la
   récupérabilité sur la concision.
-- **Pas de signature GPG des binaires** : la chaîne de confiance repose sur
-  HTTPS + SHA-256 publiés par la release GitHub. Acceptable pour un outil
-  local-first à faible surface ; une signature pourra être ajoutée
-  ultérieurement sans changer le modèle.
+- **Signature des binaires : Sigstore (keyless), pas de GPG** : la chaîne de
+  confiance repose sur HTTPS + SHA-256 (toujours obligatoire) publiés par la
+  release GitHub, **complétée depuis la v0.8 par la vérification optionnelle de
+  la signature Sigstore** de l'archive (`cosign verify-blob`, OIDC keyless, sans
+  clé privée longue durée). La vérification est best-effort par défaut (pour ne
+  pas casser les environnements minimaux sans `cosign`) et peut être rendue
+  stricte (`--require-signature` / `MNEMO_REQUIRE_SIGNATURE=1`). GPG reste écarté
+  (gestion de clés longue durée jugée plus lourde et moins auditable que le
+  modèle keyless).
 - **Linux uniquement** : réduit la surface et simplifie les hypothèses
   (permissions POSIX, `~/.bashrc`).
 
@@ -181,7 +198,7 @@ si un seul contrôle critique échoue** :
   - un fichier de **checksums agrégés** couvrant les deux archives et le SBOM
     (`scripts/checksums-release.sh`), vérifié avant signature ;
   - pour chaque artefact, une **signature `cosign`** (keyless, OIDC ambiant
-    GitHub Actions — aucun secret long terme) et une **attestation de
+    GitHub Actions - aucun secret long terme) et une **attestation de
     provenance SLSA v1** (`cosign attest-blob`), toutes deux **re-vérifiées**
     par `cosign verify-blob` / `verify-blob-attestation`
     (`scripts/sign-release.sh`).
@@ -222,9 +239,14 @@ si un seul contrôle critique échoue** :
   n'est pas un niveau SLSA Build L3 formellement certifié : le build n'est pas
   isolé sur un constructeur dédié inviolable. Le prédicat reflète le contexte
   GitHub Actions ; il faut faire confiance à ce contexte.
-- La vérification `cosign` (signature + provenance) est, en v0.7, une **étape
-  manuelle** documentee côté utilisateur. `install.sh` et `mnemo upgrade`
-  continuent d'exiger la vérification SHA-256 mais n'imposent pas encore la
-  vérification cosign ; son intégration optionnelle est prévue ultérieurement
-  (TODO v0.8), sans jamais affaiblir le contrôle SHA-256 existant.
+- Depuis la **v0.8**, `install.sh` et `mnemo upgrade` vérifient
+  **automatiquement la signature Sigstore** de l'archive (`cosign verify-blob`)
+  lorsque `cosign` est présent, en plus du contrôle SHA-256 toujours obligatoire.
+  La vérification est best-effort par défaut (avertissement si `cosign` est
+  absent, pour préserver les environnements minimaux) et peut être rendue
+  bloquante via `--require-signature` / `MNEMO_REQUIRE_SIGNATURE=1`. `cosign`
+  n'est jamais téléchargé automatiquement par l'installateur. La vérification de
+  la **provenance** (`*.provenance.sigstore.json`) reste, elle, une **étape
+  manuelle** documentée côté utilisateur ; seule la signature de l'archive est
+  contrôlée automatiquement.
 

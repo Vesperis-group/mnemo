@@ -101,8 +101,11 @@ Le script :
 
 1. détecte l'architecture (`uname -m`) et choisit l'asset adapté ;
 2. télécharge l'archive `.tar.gz` **et** son `.sha256` ;
-3. **vérifie l'intégrité** (SHA-256) avant toute installation ;
-4. installe le binaire dans `~/.local/bin/mnemo` (créé si absent) ;
+3. **vérifie l'intégrité** (SHA-256, **toujours obligatoire**) avant toute
+   installation ;
+4. **vérifie la signature Sigstore** de l'archive si `cosign` est présent
+   (best-effort par défaut, voir ci-dessous) ;
+5. installe le binaire dans `~/.local/bin/mnemo` (créé si absent) ;
 5. vérifie que `~/.local/bin` est dans le `PATH` ;
 6. lance `mnemo init` ;
 7. **propose** d'ajouter l'intégration Bash à `~/.bashrc` (sauvegarde +
@@ -129,6 +132,33 @@ Mode non interactif (utile en CI) :
 MNEMO_ASSUME_YES=1 ... bash ...   # confirme automatiquement
 MNEMO_NO_BASHRC=1  ... bash ...   # n'ajoute pas le bloc .bashrc
 ```
+
+#### Vérification de signature Sigstore (optionnelle / stricte)
+
+Le SHA-256 reste **toujours** obligatoire et bloquant. En complément
+(défense en profondeur), le script vérifie aussi la **signature Sigstore** de
+l'archive lorsque [`cosign`](https://docs.sigstore.dev/cosign/installation/)
+est installé :
+
+- **Par défaut (best-effort)** : si `cosign` est absent ou si le bundle de
+  signature est indisponible, le script **avertit** puis **continue**, car
+  l'intégrité SHA-256 a déjà été vérifiée. Une signature présente mais
+  **invalide** interrompt toujours l'installation.
+- **Mode strict** : `MNEMO_REQUIRE_SIGNATURE=1` rend la vérification
+  obligatoire. L'installation est **refusée** si `cosign` est absent, si le
+  bundle est indisponible, ou si la signature est invalide.
+
+```bash
+# Installation strictement signée (refuse si cosign absent ou signature KO)
+MNEMO_REQUIRE_SIGNATURE=1 \
+  bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)
+```
+
+> `cosign` n'est **jamais** téléchargé automatiquement (pas de `curl | bash`
+> implicite). Installez-le via le gestionnaire de paquets de votre
+> distribution ou `go install github.com/sigstore/cosign/v2/cmd/cosign@latest`.
+> L'identité et l'émetteur OIDC attendus sont configurables via
+> `MNEMO_SIGN_IDENTITY` et `MNEMO_SIGN_OIDC_ISSUER`.
 
 ### Cibles Linux disponibles
 
@@ -252,7 +282,8 @@ vérification et n'installe **rien** : il se contente d'indiquer `Lancez
 L'option `--upgrade` lance l'installation sans poser la question de `update` ;
 sans `--yes`, c'est `mnemo upgrade` qui demande sa confirmation finale (un seul
 prompt). `--upgrade --yes` permet un upgrade entièrement automatisé. Aucune
-installation n'a lieu sans consentement.
+installation n'a lieu sans consentement. Le drapeau `--require-signature` est
+transmis tel quel à `mnemo upgrade` (voir ci-dessous).
 
 Exemple JSON :
 
@@ -273,15 +304,25 @@ mnemo upgrade --yes           # sans question
 mnemo upgrade --dry-run       # montre ce qui serait fait, n'installe rien
 mnemo upgrade --version v0.5.0 # version précise
 mnemo upgrade --target aarch64-unknown-linux-musl
+mnemo upgrade --require-signature # exige une signature Sigstore valide
 ```
 
 Déroulé : téléchargement de l'archive **et** de son `.sha256`, **vérification
-SHA-256 avant extraction**, contrôle que le nouveau binaire répond, sauvegarde
-automatique des données, puis remplacement **atomique** de `~/.local/bin/mnemo`.
+SHA-256 avant extraction** (toujours obligatoire), **vérification de la
+signature Sigstore** lorsque `cosign` est présent, contrôle que le nouveau
+binaire répond, sauvegarde automatique des données, puis remplacement
+**atomique** de `~/.local/bin/mnemo`.
+
+La signature Sigstore suit la même logique que `install.sh` : best-effort par
+défaut (avertissement si `cosign` est absent ou si le bundle est indisponible,
+l'intégrité SHA-256 ayant déjà été vérifiée), **strict** avec
+`--require-signature` (l'upgrade est refusé si la signature ne peut pas être
+vérifiée). Une signature présente mais invalide refuse **toujours** l'upgrade.
 
 > 🔒 `upgrade` ne touche **jamais** à `history.db`, `config.toml` ni aux
 > sauvegardes. HTTPS et SHA-256 sont obligatoires ; aucun script distant n'est
-> exécuté. En cas d'échec, le binaire en place reste intact.
+> exécuté ; `cosign` n'est jamais téléchargé automatiquement. En cas d'échec,
+> le binaire en place reste intact.
 
 ### `mnemo uninstall` - retirer mnemo
 
@@ -335,8 +376,8 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo prune --older-than <durée> [--project <nom>] [--branch <branche>] [--dry-run] [--yes]` | Nettoie les commandes anciennes (`30d`, `12w`, `6m`, `1y`). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
-| `mnemo update [--json] [--upgrade] [--yes]` | Vérifie si une nouvelle version est disponible. En terminal interactif, propose l'installation immédiate ; `--upgrade` enchaîne `mnemo upgrade` (avec `--yes` pour l'automatisation). Sans terminal ou avec `--json`, n'installe **rien**. |
-| `mnemo upgrade [--dry-run] [--yes] [--version <vX.Y.Z>] [--target <triplet>]` | Télécharge et installe la dernière version (vérif. SHA-256, remplacement atomique). |
+| `mnemo update [--json] [--upgrade] [--yes] [--require-signature]` | Vérifie si une nouvelle version est disponible. En terminal interactif, propose l'installation immédiate ; `--upgrade` enchaîne `mnemo upgrade` (avec `--yes` pour l'automatisation, `--require-signature` transmis tel quel). Sans terminal ou avec `--json`, n'installe **rien**. |
+| `mnemo upgrade [--dry-run] [--yes] [--version <vX.Y.Z>] [--target <triplet>] [--require-signature]` | Télécharge et installe la dernière version (vérif. SHA-256 obligatoire, signature Sigstore best-effort ou stricte via `--require-signature`, remplacement atomique). |
 | `mnemo uninstall [--dry-run] [--yes] [--purge]` | Désinstalle mnemo. **Conserve les données** sauf `--purge`. |
 
 Le mode `--print` garde le comportement TUI **par défaut** (sans `--print`).
@@ -1010,7 +1051,7 @@ mnemo est outillé comme un vrai projet DevSecOps :
   - **Checksums agrégés** (`*-checksums.txt`) couvrant les deux archives et le
     SBOM, vérifiés avant signature.
   - **Signatures + provenance keyless** : chaque artefact est signé par
-    `cosign` (version épinglée, OIDC ambiant GitHub Actions — **aucun secret
+    `cosign` (version épinglée, OIDC ambiant GitHub Actions - **aucun secret
     long terme**) et accompagné d'une **attestation de provenance SLSA v1**.
     Les bundles Sigstore (`*.sigstore.json` et `*.provenance.sigstore.json`)
     sont produits **et vérifiés** dans les hooks `after:bump` de release-it,
@@ -1020,7 +1061,7 @@ mnemo est outillé comme un vrai projet DevSecOps :
     `cosign` vérifiés par SHA-256 avant exécution (pas de `curl | bash`).
   - **Versions d'outillage figées** (aucun canal flottant) : Rust épinglé par
     [rust-toolchain.toml](rust-toolchain.toml) (`1.96.0` + `rustfmt`/`clippy` +
-    cible musl, lu par le `rustup` du runner — pas d'action tierce de
+    cible musl, lu par le `rustup` du runner - pas d'action tierce de
     toolchain) ; Node.js épinglé par [.node-version](.node-version) (`24.15.0`,
     via `node-version-file`) ; outils Cargo (`cargo-audit`, `cargo-deny`,
     `cargo-machete`, `cargo-cyclonedx`) installés en **version exacte**
@@ -1047,7 +1088,7 @@ fichier `mnemo-v<version>-checksums.txt` agrège les empreintes.
 # 1. Empreinte SHA-256 (toujours disponible, aucun outil tiers requis)
 sha256sum -c mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz.sha256
 
-# 2. Signature cosign (keyless) — nécessite cosign installé
+# 2. Signature cosign (keyless) - nécessite cosign installé
 cosign verify-blob \
   --bundle mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz.sigstore.json \
   --certificate-identity-regexp '^https://github.com/Vesperis-group/mnemo/\.github/workflows/.+@refs/heads/main$' \
@@ -1064,9 +1105,14 @@ cosign verify-blob-attestation \
 ```
 
 > `install.sh` et `mnemo upgrade` vérifient **systématiquement** l'empreinte
-> SHA-256 avant toute extraction ou remplacement de binaire. La vérification
-> cosign (signature + provenance) est **manuelle** en v0.7 ; son intégration
-> optionnelle à l'installateur est prévue pour une version ultérieure.
+> SHA-256 avant toute extraction ou remplacement de binaire. Depuis la v0.8,
+> ils vérifient **aussi automatiquement la signature Sigstore** de l'archive
+> lorsque `cosign` est présent : best-effort par défaut (avertissement si
+> `cosign` est absent, l'intégrité SHA-256 étant déjà garantie), strict avec
+> `mnemo upgrade --require-signature` ou `MNEMO_REQUIRE_SIGNATURE=1` pour
+> `install.sh`. La vérification de la **provenance SLSA** reste **manuelle**
+> (commande ci-dessus) : seule la signature de l'archive est contrôlée
+> automatiquement.
 
 ---
 

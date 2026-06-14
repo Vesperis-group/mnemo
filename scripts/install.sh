@@ -19,8 +19,17 @@
 #   MNEMO_INSTALL_FROM_SOURCE=1 bash scripts/install.sh
 #
 # Options communes :
-#   MNEMO_ASSUME_YES=1   confirme automatiquement (CI / non interactif)
-#   MNEMO_NO_BASHRC=1    n'ajoute pas le bloc d'intégration .bashrc
+#   MNEMO_ASSUME_YES=1        confirme automatiquement (CI / non interactif)
+#   MNEMO_NO_BASHRC=1         n'ajoute pas le bloc d'intégration .bashrc
+#   MNEMO_REQUIRE_SIGNATURE=1 exige une signature Sigstore valide (cosign requis)
+#
+# Vérification d'intégrité :
+#   - le SHA-256 de l'archive est TOUJOURS vérifié (obligatoire, bloquant) ;
+#   - si `cosign` est installé, la signature Sigstore keyless est vérifiée en
+#     plus (défense en profondeur) ; sinon un simple avertissement est émis ;
+#   - avec MNEMO_REQUIRE_SIGNATURE=1, l'absence de cosign, de bundle ou une
+#     signature invalide REFUSE l'installation.
+#   cosign n'est jamais téléchargé automatiquement (pas de `curl | bash`).
 
 set -euo pipefail
 
@@ -33,6 +42,10 @@ MNEMO_REPO_URL="${MNEMO_REPO_URL:-https://github.com/${MNEMO_OWNER}/${MNEMO_REPO
 MNEMO_REPO_BRANCH="${MNEMO_REPO_BRANCH:-main}"
 GITHUB_BASE="${MNEMO_GITHUB_BASE:-https://github.com}"
 GITHUB_API="${MNEMO_GITHUB_API:-https://api.github.com}"
+
+# Identité keyless et émetteur OIDC attendus pour la vérification cosign.
+MNEMO_SIGN_IDENTITY="${MNEMO_SIGN_IDENTITY:-https://github.com/${MNEMO_OWNER}/${MNEMO_REPO}/.github/workflows/release.yml@refs/heads/main}"
+MNEMO_SIGN_OIDC_ISSUER="${MNEMO_SIGN_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 
 BIN_DIR="${HOME}/.local/bin"
 BIN_PATH="${BIN_DIR}/mnemo"
@@ -98,6 +111,54 @@ http_to_stdout() {
         wget -qO- "${url}"
     else
         die "curl ou wget est requis pour l'installation distante."
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Vérification Sigstore (cosign) - OPTIONNELLE.
+#
+# Le SHA-256 (vérifié juste avant l'appel) reste l'unique contrôle obligatoire.
+# Cette étape est une défense en profondeur :
+#   - cosign absent, mode normal     -> avertissement, on continue ;
+#   - cosign absent, mode strict      -> refus ;
+#   - bundle indisponible, normal     -> avertissement, on continue ;
+#   - bundle indisponible, strict     -> refus ;
+#   - signature invalide              -> refus (tous modes) ;
+#   - signature valide                -> on continue.
+#
+# Arguments : <dossier_tmp> <nom_asset> <url_base>.
+# ---------------------------------------------------------------------------
+verify_signature() {
+    local tmp="$1" asset="$2" base="$3"
+    local strict="${MNEMO_REQUIRE_SIGNATURE:-0}"
+    local bundle="${asset}.sigstore.json"
+
+    if ! command -v cosign >/dev/null 2>&1; then
+        if [ "${strict}" = "1" ]; then
+            die "Signature Sigstore obligatoire (MNEMO_REQUIRE_SIGNATURE=1) mais cosign est introuvable."
+        fi
+        warn "Signature Sigstore non vérifiée : cosign absent (continuité autorisée car SHA-256 vérifié)."
+        warn "Définissez MNEMO_REQUIRE_SIGNATURE=1 pour rendre ce contrôle obligatoire."
+        return 0
+    fi
+
+    info "Vérification de la signature Sigstore (cosign)"
+    if ! http_to_file "${base}/${bundle}" "${tmp}/${bundle}" 2>/dev/null; then
+        if [ "${strict}" = "1" ]; then
+            die "Signature Sigstore obligatoire mais le bundle ${bundle} est indisponible."
+        fi
+        warn "Signature Sigstore non vérifiée : bundle indisponible (continuité autorisée car SHA-256 vérifié)."
+        return 0
+    fi
+
+    if cosign verify-blob \
+        --bundle "${tmp}/${bundle}" \
+        --certificate-identity "${MNEMO_SIGN_IDENTITY}" \
+        --certificate-oidc-issuer "${MNEMO_SIGN_OIDC_ISSUER}" \
+        "${tmp}/${asset}" >/dev/null 2>&1; then
+        ok "Signature Sigstore vérifiée"
+    else
+        die "Signature Sigstore invalide : installation refusée."
     fi
 }
 
@@ -216,12 +277,11 @@ install_from_release() {
         || die "Somme de contrôle invalide : archive corrompue ou altérée."
     ok "Intégrité vérifiée"
 
-    # Note (v0.7) : chaque release publie aussi une signature cosign
-    # (<asset>.sigstore.json) et une attestation de provenance SLSA
-    # (<asset>.provenance.sigstore.json). Leur vérification est, pour l'instant,
-    # une étape MANUELLE documentée dans le README (« Vérifier l'intégrité d'une
-    # release »). TODO v0.8 : vérification cosign optionnelle ici, sans jamais
-    # affaiblir le contrôle SHA-256 ci-dessus.
+    # Vérification Sigstore (défense en profondeur). Le SHA-256 ci-dessus reste
+    # l'unique contrôle obligatoire ; cette étape est best-effort par défaut et
+    # bloquante avec MNEMO_REQUIRE_SIGNATURE=1. cosign n'est jamais téléchargé
+    # automatiquement (cf. README, « Vérifier l'intégrité d'une release »).
+    verify_signature "${tmp}" "${asset}" "${base}"
 
     info "Extraction"
     tar -xzf "${tmp}/${asset}" -C "${tmp}"
@@ -277,5 +337,12 @@ main() {
         install_from_release
     fi
 }
+
+# Permet de sourcer ce script (tests unitaires des fonctions) sans déclencher
+# l'installation. En usage normal (exécution directe ou `curl | bash`), la
+# variable n'est pas définie et `main` s'exécute.
+if [ "${MNEMO_LIB_ONLY:-0}" = "1" ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 main "$@"
