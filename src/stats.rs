@@ -244,7 +244,7 @@ fn top_n(counts: std::collections::HashMap<String, usize>, n: usize) -> Vec<(Str
 // ---------------------------------------------------------------------------
 
 fn render_text<W: Write>(out: &mut W, stats: &Stats, filters: &Filters) -> std::io::Result<()> {
-    writeln!(out, "mnemo stats — statistiques d'usage")?;
+    writeln!(out, "mnemo stats - statistiques d'usage")?;
     writeln!(out, "----------------------------------")?;
     if !filters.is_empty() {
         writeln!(

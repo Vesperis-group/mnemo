@@ -5,7 +5,7 @@
 
 > Dépôt officiel : <https://github.com/Vesperis-group/mnemo>
 
-> Navigation et recherche **fuzzy** dans l'historique Bash — un outil maison en
+> Navigation et recherche **fuzzy** dans l'historique Bash - un outil maison en
 > **Rust** (CLI + TUI), **local-first**, sans serveur ni cloud.
 
 `mnemo` est une alternative personnelle et minimaliste à Atuin / HSTR /
@@ -54,7 +54,7 @@ commande.
 Interface TUI (`mnemo search`) :
 
 ```text
-┌ mnemo — recherche ──────────────────────────────────┐
+┌ mnemo - recherche ──────────────────────────────────┐
 │ cargo                                                │
 └──────────────────────────────────────────────────────┘
 ┌ 3 résultat(s) ───────────────────────────────────────┐
@@ -222,7 +222,7 @@ make uninstall
 Depuis la v0.5, mnemo gère lui-même son cycle de vie, sans dépendre des scripts
 shell.
 
-### `mnemo update` — y a-t-il du nouveau ?
+### `mnemo update` - y a-t-il du nouveau ?
 
 ```bash
 mnemo update          # compare version installée et dernière release
@@ -242,7 +242,7 @@ disponible. Exemple JSON :
 }
 ```
 
-### `mnemo upgrade` — installer la dernière version
+### `mnemo upgrade` - installer la dernière version
 
 ```bash
 mnemo upgrade                 # dernière version stable (confirmation demandée)
@@ -260,23 +260,31 @@ automatique des données, puis remplacement **atomique** de `~/.local/bin/mnemo`
 > sauvegardes. HTTPS et SHA-256 sont obligatoires ; aucun script distant n'est
 > exécuté. En cas d'échec, le binaire en place reste intact.
 
-### `mnemo uninstall` — retirer mnemo
+### `mnemo uninstall` - retirer mnemo
 
 ```bash
-mnemo uninstall              # retire binaire + bloc .bashrc, GARDE les données
+mnemo uninstall              # demande confirmation, puis retire binaire + bloc .bashrc
+mnemo uninstall --yes        # sans question (CI/script), GARDE les données
 mnemo uninstall --dry-run    # aperçu sans rien modifier
-mnemo uninstall --purge      # supprime AUSSI config, base et sauvegardes
+mnemo uninstall --purge      # supprime AUSSI config, base et sauvegardes (confirmation forte)
 mnemo uninstall --purge --yes
 ```
+
+`uninstall` est désormais **toujours protégé par une confirmation** : retirer le
+binaire et l'intégration shell reste une action destructive. En interactif, une
+question est posée (`Désinstaller mnemo tout en conservant les données ? [y/N]`) ;
+en mode non interactif **sans `--yes`**, la commande refuse proprement avec un
+code de sortie non nul et le message *« Confirmation requise. Relancez avec
+--yes pour confirmer ou --dry-run pour prévisualiser. »*
 
 Par défaut, `uninstall` retire le binaire et le bloc d'intégration `.bashrc`
 (après sauvegarde) mais **conserve toutes les données**. Avec `--purge`, une
 sauvegarde de sécurité est créée hors du dossier de données, puis config, base
-et sauvegardes sont supprimées **après confirmation explicite** ; en mode non
-interactif, `--purge` exige `--yes`.
+et sauvegardes sont supprimées **après confirmation forte** ; en mode non
+interactif, `--purge` exige aussi `--yes`.
 
-> Toutes ces commandes destructrices disposent de `--dry-run` (aperçu) et
-> `--yes` (sans question).
+> `--dry-run` ne supprime **jamais** rien, et aucune donnée n'est touchée sans
+> `--purge`.
 
 ---
 
@@ -523,7 +531,7 @@ règles :
   avant action ;
 - **confirmation obligatoire** : sans `--yes`, une confirmation interactive est
   demandée. En mode **non interactif** (script, pipe), l'opération est
-  **refusée** sans `--yes` — jamais de suppression silencieuse ;
+  **refusée** sans `--yes` - jamais de suppression silencieuse ;
 - **sauvegarde automatique** : un backup complet est créé avant toute
   suppression ou restauration réelle ;
 - **transactions SQLite** pour `delete` / `prune` / `restore`.
@@ -594,7 +602,7 @@ mnemo delete 123 --yes      # suppression directe
 ```
 
 `mnemo list` affiche `id`, date courte, projet/dossier, `exit_code` et la
-commande — pratique pour repérer l'ID à passer à `mnemo delete`.
+commande - pratique pour repérer l'ID à passer à `mnemo delete`.
 
 ### Nettoyage par ancienneté
 
@@ -682,8 +690,8 @@ mnemo doctor --json   # sortie JSON exploitable (scripts / CI)
 - Présence de `~/.config/mnemo/config.toml` et `~/.local/share/mnemo/history.db`.
 - Base SQLite ouvrable, table `commands` présente, nombre de commandes.
 - Présence de `~/.bashrc`, du bloc mnemo (non dupliqué) et du bind `Ctrl+R`.
-- Shell courant (`$SHELL`) — avertissement si ce n'est pas Bash.
-- `HISTTIMEFORMAT` — information si non configuré.
+- Shell courant (`$SHELL`) - avertissement si ce n'est pas Bash.
+- `HISTTIMEFORMAT` - information si non configuré.
 - Permissions simples de la config et de la base.
 
 ### Statuts et code retour
@@ -709,7 +717,7 @@ Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]` ou `[INFO]`.
 ### Exemple de sortie
 
 ```text
-mnemo doctor — rapport de diagnostic
+mnemo doctor - rapport de diagnostic
 ------------------------------------
 [INFO ] mnemo version 0.1.0
 [ OK  ] Binaire trouvé dans le PATH : ~/.local/bin/mnemo
@@ -892,7 +900,7 @@ plus tard s'il est installé.
 | --- | --- | --- |
 | Configuration | `$XDG_CONFIG_HOME` | `~/.config/mnemo/config.toml` |
 | Base SQLite | `$XDG_DATA_HOME` | `~/.local/share/mnemo/history.db` |
-| Binaire | — | `~/.local/bin/mnemo` |
+| Binaire | - | `~/.local/bin/mnemo` |
 
 Exemple de `config.toml` :
 
@@ -1114,10 +1122,10 @@ flowchart TD
   `.bash_history` reçoivent l'heure de l'import (Bash ne stocke les dates que si
   `HISTTIMEFORMAT` est actif).
 - Recherche fuzzy en mémoire (chargement jusqu'à `search_limit`, 5000 par
-  défaut) — pas de pagination côté base.
+  défaut) - pas de pagination côté base.
 - Bash uniquement (pas de Zsh/Fish), pas de recherche plein-texte SQLite (FTS),
   pas de filtre par `cwd` / code de sortie dans la TUI.
-- Hash de dédoublonnage non cryptographique (FNV-1a) — adapté au dédoublonnage,
+- Hash de dédoublonnage non cryptographique (FNV-1a) - adapté au dédoublonnage,
   pas à la sécurité.
 
 ---
@@ -1155,7 +1163,7 @@ sur une distribution récente exige une glibc récente.
 Solutions :
 - utilisez une release **`v0.1.2`+** ;
 - préférez l'asset **`x86_64-unknown-linux-musl`** (statique, sans dépendance à
-  la glibc) — c'est le **choix par défaut** de l'installateur :
+  la glibc) - c'est le **choix par défaut** de l'installateur :
   ```bash
   MNEMO_TARGET="x86_64-unknown-linux-musl" \
     bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)

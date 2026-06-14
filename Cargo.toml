@@ -2,7 +2,7 @@
 name = "mnemo"
 version = "0.2.2"
 edition = "2021"
-description = "mnemo — navigation et recherche dans l'historique Bash (CLI/TUI maison)"
+description = "mnemo - navigation et recherche dans l'historique Bash (CLI/TUI maison)"
 license = "MIT"
 authors = ["mnemo contributors"]
 readme = "README.md"

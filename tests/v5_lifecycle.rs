@@ -272,16 +272,46 @@ fn uninstall_purge_yes_supprime_donnees_avec_sauvegarde() {
 }
 
 #[test]
+fn uninstall_non_interactif_sans_yes_refuse() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+
+    // Pas de --yes, entrée non interactive (pipe) : doit refuser proprement
+    // avec un code de sortie non nul et ne RIEN supprimer.
+    let out = mnemo(home).arg("uninstall").output().unwrap();
+    assert!(
+        !out.status.success(),
+        "doit échouer (confirmation requise) : {}",
+        stderr(&out)
+    );
+    assert!(
+        stderr(&out).contains("Confirmation requise"),
+        "message attendu, obtenu : {}",
+        stderr(&out)
+    );
+    assert!(bin.exists(), "le binaire ne doit pas être supprimé");
+    assert!(config_dir(home).exists());
+    assert!(data_dir(home).exists());
+}
+
+#[test]
 fn uninstall_purge_non_interactif_sans_yes_refuse() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     init(home);
     let bin = fake_bin(home);
 
-    // Pas de --yes, entrée non interactive : la purge doit être refusée et les
-    // données conservées.
+    // Pas de --yes, entrée non interactive : la purge doit être refusée avec un
+    // code non nul, et rien ne doit être supprimé.
     let out = mnemo(home).args(["uninstall", "--purge"]).output().unwrap();
-    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(
+        !out.status.success(),
+        "doit échouer (confirmation requise) : {}",
+        stderr(&out)
+    );
+    assert!(stderr(&out).contains("Confirmation requise"));
     assert!(
         config_dir(home).exists(),
         "config conservée (purge refusée)"
