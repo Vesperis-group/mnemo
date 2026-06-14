@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.2.2](https://github.com/Vesperis-group/mnemo/compare/v0.2.1...v0.2.2) (2026-06-14)
+
+### Bug Fixes
+
+* ajoute une configuration des commandes ignorées dans les stats ([a7d30a6](https://github.com/Vesperis-group/mnemo/commit/a7d30a650e8ad89e53d02c0dfc73acb2221673f8))
+
 ## [0.2.1](https://github.com/Vesperis-group/mnemo/compare/v0.2.0...v0.2.1) (2026-06-14)
 
 ### Bug Fixes
