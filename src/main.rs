@@ -123,7 +123,7 @@ fn run() -> Result<()> {
             version::run();
             Ok(())
         }
-        Command::Update { json } => lifecycle::update::run(json),
+        Command::Update { json, upgrade, yes } => lifecycle::update::run(json, upgrade, yes),
         Command::Upgrade {
             dry_run,
             yes,

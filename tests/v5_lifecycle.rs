@@ -398,6 +398,116 @@ fn update_erreur_reseau_affichee_proprement() {
     assert!(e.contains("Error"), "message d'erreur attendu : {e}");
 }
 
+#[test]
+fn update_non_interactif_reste_check_only_sans_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+    let base = start_server(release_routes("v99.0.0", TARGET, b"x", None));
+
+    // stdin/stdout non interactifs (sortie capturée) : aucune proposition ne
+    // doit apparaître, et rien ne doit être installé.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd.arg("update").output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("Mise à jour disponible"));
+    assert!(
+        s.contains("Lancez `mnemo upgrade`"),
+        "l'indication classique doit rester : {s}"
+    );
+    assert!(
+        !s.contains("Installer maintenant"),
+        "aucun prompt ne doit être affiché en non interactif : {s}"
+    );
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire inchangé");
+}
+
+#[test]
+fn update_a_jour_aucune_proposition() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+    // Version distante plus ancienne que celle installée → pas de mise à jour.
+    let base = start_server(release_routes("v0.0.1", TARGET, b"x", None));
+
+    // Même avec `--upgrade --yes`, aucune installation si rien de plus récent.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd.args(["update", "--upgrade", "--yes"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("mnemo est à jour"));
+    assert!(
+        !s.contains("Installer maintenant"),
+        "aucun prompt si pas de mise à jour : {s}"
+    );
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire inchangé");
+}
+
+#[test]
+fn update_upgrade_yes_installe_si_disponible() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+
+    let script = b"#!/bin/sh\necho 'mnemo 99.0.0'\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // `update --upgrade --yes` : enchaîne l'upgrade sans prompt et remplace le
+    // binaire, en réutilisant la logique de `mnemo upgrade`.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd.args(["update", "--upgrade", "--yes"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("Mise à jour disponible"));
+    assert!(
+        s.contains("Intégrité SHA-256 vérifiée"),
+        "le chemin upgrade (avec vérif SHA-256) doit être emprunté : {s}"
+    );
+    assert_eq!(
+        std::fs::read(&bin).unwrap(),
+        script,
+        "le binaire doit être remplacé via le chemin upgrade"
+    );
+    // Les données restent intactes.
+    assert!(config_dir(home).exists());
+    assert!(data_dir(home).exists());
+}
+
+#[test]
+fn update_upgrade_sans_yes_non_interactif_n_installe_pas() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // `--upgrade` sans `--yes`, en non interactif : la confirmation finale de
+    // `upgrade` refuse proprement, donc rien n'est installé (consentement requis).
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd.args(["update", "--upgrade"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(
+        std::fs::read(&bin).unwrap(),
+        before,
+        "aucune installation sans consentement"
+    );
+}
+
 // --------------------------------------------------------------------------
 // upgrade
 // --------------------------------------------------------------------------
