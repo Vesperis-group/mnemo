@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.7.0](https://github.com/Vesperis-group/mnemo/compare/v0.6.3...v0.7.0) (2026-06-14)
+
+### Features
+
+* propose l'upgrade depuis mnemo update ([7868006](https://github.com/Vesperis-group/mnemo/commit/78680063dee02299d7fdf4fe803c30ccbb737137))
+
 ## [0.6.3](https://github.com/Vesperis-group/mnemo/compare/v0.6.2...v0.6.3) (2026-06-14)
 
 ## [0.6.2](https://github.com/Vesperis-group/mnemo/compare/v0.6.1...v0.6.2) (2026-06-14)
