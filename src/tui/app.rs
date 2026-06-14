@@ -66,6 +66,94 @@ impl TuiFilters {
     }
 }
 
+/// Indicateurs agrégés affichés dans la barre de synthèse (« overview »).
+///
+/// `success` / `failed` sont calculés sur les commandes **visibles** (après
+/// filtres), tandis que `total` reflète l'ensemble chargé en mémoire et
+/// `projects` le nombre de projets distincts toutes commandes confondues.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Overview {
+    /// Nombre total de commandes chargées.
+    pub total: usize,
+    /// Commandes visibles après filtres et recherche.
+    pub visible: usize,
+    /// Visibles terminées en succès (`exit_code == 0`).
+    pub success: usize,
+    /// Visibles terminées en échec (`exit_code` présent et ≠ 0).
+    pub failed: usize,
+    /// Projets Git distincts (sur l'ensemble chargé).
+    pub projects: usize,
+    /// Shell dominant sur l'ensemble chargé, le cas échéant.
+    pub top_shell: Option<String>,
+}
+
+impl Overview {
+    /// Calcule les indicateurs à partir des commandes et des indices visibles.
+    pub fn compute(records: &[CommandRecord], filtered: &[usize]) -> Self {
+        let mut success = 0usize;
+        let mut failed = 0usize;
+        for &idx in filtered {
+            match records[idx].exit_code {
+                Some(0) => success += 1,
+                Some(_) => failed += 1,
+                None => {}
+            }
+        }
+
+        let mut projects: Vec<&str> = records
+            .iter()
+            .filter_map(|r| r.git_root.as_deref().filter(|s| !s.is_empty()))
+            .map(last_segment)
+            .collect();
+        projects.sort_unstable();
+        projects.dedup();
+
+        let top_shell = dominant_shell(records);
+
+        Self {
+            total: records.len(),
+            visible: filtered.len(),
+            success,
+            failed,
+            projects: projects.len(),
+            top_shell,
+        }
+    }
+
+    /// Taux d'échec parmi les commandes visibles ayant un statut connu (0.0 à
+    /// 100.0). Renvoie `0.0` si aucune commande exécutée n'est visible.
+    pub fn failure_rate(&self) -> f64 {
+        let executed = self.success + self.failed;
+        if executed == 0 {
+            0.0
+        } else {
+            (self.failed as f64 / executed as f64) * 100.0
+        }
+    }
+}
+
+/// Détermine le shell le plus fréquent parmi les commandes (ignorant les
+/// valeurs absentes). En cas d'égalité, renvoie l'un des shells à fréquence
+/// maximale de façon déterministe pour un même jeu de données.
+fn dominant_shell(records: &[CommandRecord]) -> Option<String> {
+    use std::collections::HashMap;
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    let mut order: Vec<&str> = Vec::new();
+    for r in records {
+        if let Some(shell) = r.shell.as_deref().filter(|s| !s.is_empty()) {
+            let entry = counts.entry(shell).or_insert(0);
+            if *entry == 0 {
+                order.push(shell);
+            }
+            *entry += 1;
+        }
+    }
+    order
+        .into_iter()
+        .max_by_key(|shell| counts[shell])
+        .map(|s| s.to_string())
+}
+
 /// Mode courant de l'interface (détermine le rendu et l'interprétation des
 /// touches).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -267,6 +355,13 @@ impl TuiApp {
     /// Identifiant de la commande sélectionnée.
     pub fn selected_id(&self) -> Option<i64> {
         self.selected_record().map(|r| r.id)
+    }
+
+    /// Calcule les indicateurs (KPI) affichés dans la barre de synthèse :
+    /// total chargé, visibles après filtres, succès / échecs visibles, taux
+    /// d'échec, nombre de projets distincts et shell dominant.
+    pub fn overview(&self) -> Overview {
+        Overview::compute(&self.records, &self.filtered)
     }
 
     // -- Édition de la requête ---------------------------------------------
@@ -648,6 +743,41 @@ mod tests {
 
     fn app() -> TuiApp {
         TuiApp::new(sample(), TuiFilters::default(), String::new())
+    }
+
+    #[test]
+    fn overview_compte_succes_echecs_projets_et_shell() {
+        let a = app();
+        let ov = a.overview();
+        assert_eq!(ov.total, 5);
+        assert_eq!(ov.visible, 5);
+        assert_eq!(ov.success, 3, "3 commandes en succès");
+        assert_eq!(ov.failed, 2, "2 commandes en échec");
+        // git_root distincts : mnemo + other.
+        assert_eq!(ov.projects, 2);
+        assert_eq!(ov.top_shell.as_deref(), Some("bash"));
+        // 2 échecs sur 5 exécutées = 40 %.
+        assert!((ov.failure_rate() - 40.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overview_taux_echec_nul_sans_commande_executee() {
+        let ov = Overview::compute(&[], &[]);
+        assert_eq!(ov.total, 0);
+        assert_eq!(ov.visible, 0);
+        assert_eq!(ov.failure_rate(), 0.0);
+        assert!(ov.top_shell.is_none());
+    }
+
+    #[test]
+    fn overview_suit_les_filtres_visibles() {
+        let mut a = app();
+        a.cycle_status_filter(); // -> succès uniquement
+        let ov = a.overview();
+        assert_eq!(ov.total, 5, "le total reste l'ensemble chargé");
+        assert_eq!(ov.visible, 3, "seuls les succès sont visibles");
+        assert_eq!(ov.failed, 0);
+        assert_eq!(ov.success, 3);
     }
 
     #[test]

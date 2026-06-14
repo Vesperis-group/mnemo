@@ -6,6 +6,8 @@
 //! - [`events`] : mapping clavier -> action ;
 //! - [`actions`] : énumération des actions et accès base isolé ;
 //! - [`ui`] : rendu Ratatui ;
+//! - [`theme`] : palette et styles centralisés ;
+//! - [`format`] : helpers de formatage purs et testables ;
 //! - [`help`] : texte d'aide ;
 //! - [`clipboard`] : copie système optionnelle.
 
@@ -13,7 +15,9 @@ pub mod actions;
 pub mod app;
 pub mod clipboard;
 pub mod events;
+pub mod format;
 pub mod help;
+pub mod theme;
 pub mod ui;
 
 use anyhow::Result;
