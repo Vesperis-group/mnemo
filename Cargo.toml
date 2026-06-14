@@ -2,11 +2,11 @@
 name = "mnemo"
 version = "0.10.1"
 edition = "2021"
-description = "mnemo - navigation et recherche dans l'historique Bash (CLI/TUI maison)"
+description = "Local-first shell history assistant with search, project context, TUI, backups, maintenance and verifiable releases"
 license = "MIT"
-authors = ["mnemo contributors"]
+authors = ["Killian Van Ruymbeke"]
 readme = "README.md"
-repository = ""
+repository = "https://github.com/Vesperis-group/mnemo"
 keywords = ["history", "bash", "tui", "fuzzy", "cli"]
 categories = ["command-line-utilities"]
 
