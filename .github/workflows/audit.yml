@@ -60,7 +60,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Le binaire CLI open-source est utilisé directement plutôt que l'action
+      # gitleaks/gitleaks-action@v2, qui exige une licence payante sur les
+      # dépôts appartenant à une organisation GitHub.
+      - name: Install gitleaks CLI
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION="8.27.2"
+          curl -fsSL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks
+        run: |
+          gitleaks detect \
+            --source . \
+            --redact \
+            --verbose \
+            --exit-code 1
