@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.10.1](https://github.com/Vesperis-group/mnemo/compare/v0.10.0...v0.10.1) (2026-06-14)
+
+### Bug Fixes
+
+* corrige les KPI de synthese de la TUI ([b448b98](https://github.com/Vesperis-group/mnemo/commit/b448b98f46cf2b6b2a6babf7474ffed9ef5876ab))
+
 ## [0.10.0](https://github.com/Vesperis-group/mnemo/compare/v0.9.2...v0.10.0) (2026-06-14)
 
 ### Features
