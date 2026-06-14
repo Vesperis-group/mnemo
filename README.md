@@ -1,27 +1,32 @@
 # mnemo
 
 [![CI](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml)
+[![Audit](https://github.com/Vesperis-group/mnemo/actions/workflows/audit.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/audit.yml)
 [![Release](https://github.com/Vesperis-group/mnemo/actions/workflows/release.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#licence)
+[![Rust 1.96](https://img.shields.io/badge/rust-1.96.0-orange.svg)](rust-toolchain.toml)
+[![Supply chain](https://img.shields.io/badge/supply%20chain-SHA--256%20%2B%20cosign%20%2B%20SBOM-success.svg)](#sécurité--confidentialité)
 
 > Dépôt officiel : <https://github.com/Vesperis-group/mnemo>
 
-> Navigation et recherche **fuzzy** dans l'historique Bash - un outil maison en
-> **Rust** (CLI + TUI), **local-first**, sans serveur ni cloud.
+**Assistant d'historique shell local-first** : recherche fuzzy, contexte projet
+(Git), interface TUI, sauvegardes, maintenance et releases vérifiables. Un seul
+binaire **Rust**, sans serveur ni cloud.
 
-`mnemo` est une alternative personnelle et minimaliste à Atuin / HSTR /
-fzf-history. Chaque commande exécutée est enregistrée dans une base **SQLite**
-locale, puis retrouvée instantanément via une interface TUI ou en ligne de
-commande.
+`mnemo` enregistre chaque commande exécutée dans une base **SQLite** locale, puis
+la retrouve instantanément via une interface TUI « ops dashboard » ou en ligne de
+commande. L'objectif : un historique fiable, contextualisé et privé, qui reste
+entièrement sur votre machine.
 
-- 🦀 Rust stable, un seul binaire `mnemo` (~2,3 Mo)
+- 🦀 Rust, un seul binaire `mnemo` (~2,3 Mo), toolchain épinglée
 - 🔍 Recherche **fuzzy** interactive (`ratatui` + `crossterm` + `nucleo-matcher`)
-- 🗄️ Stockage **SQLite** local (`rusqlite`), aucun réseau
-- 🔒 Filtrage automatique des commandes sensibles
-- 🐧 Cible : **Linux / WSL** avec Bash
-- 🤖 Mode non interactif `--print` pour scripts et CI
-
-> Le code est entièrement réécrit. Atuin, HSTR et fzf n'ont servi que
-> d'inspiration fonctionnelle et UX ; aucun code tiers n'a été copié.
+- 🗄️ Stockage **SQLite** local (`rusqlite`), aucun réseau à l'usage
+- 🧭 Contexte **projet / branche Git** attaché à chaque commande
+- 🔒 Filtrage automatique des commandes sensibles, fichiers en `600`
+- 💾 Sauvegardes, restauration et maintenance par ancienneté intégrées
+- 🔏 Releases vérifiables : SHA-256, signatures cosign keyless, SBOM, provenance
+- 🐧 Cible principale : **Linux / WSL** avec Bash
+- 🤖 Mode non interactif `--print` (+ sorties JSON) pour scripts et CI
 
 ---
 
@@ -43,8 +48,10 @@ commande.
 - [Pre-commit hooks (à venir)](#pre-commit-hooks-à-venir)
 - [Chemins XDG utilisés](#chemins-xdg-utilisés)
 - [Sécurité & confidentialité](#sécurité--confidentialité)
+- [Compatibilité](#compatibilité)
+- [Compatibilité et stabilité](#compatibilité-et-stabilité)
 - [Architecture & diagrammes](#architecture--diagrammes)
-- [Limites du MVP](#limites-du-mvp)
+- [Limites connues](#limites-connues)
 - [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 - [Développement](#développement)
@@ -54,19 +61,31 @@ commande.
 
 ## Aperçu / exemple d'usage
 
-Interface TUI (`mnemo search`) :
+Interface TUI « ops dashboard » (`mnemo search`) : barre d'identité, synthèse
+(KPI), liste des commandes et panneau de détails sectionné.
 
 ```text
-┌ mnemo - recherche ──────────────────────────────────┐
-│ cargo                                                │
-└──────────────────────────────────────────────────────┘
-┌ 3 résultat(s) ───────────────────────────────────────┐
-│> 2026-06-13 10:21  ~/mnemo  cargo build --release     │
-│  2026-06-13 10:19  ~/mnemo  cargo test                │
-│  2026-06-13 10:18  ~/mnemo  cargo clippy              │
-└──────────────────────────────────────────────────────┘
- ↑/↓ naviguer   Entrée sélectionner   Esc/Ctrl+C quitter
+┌ mnemo ───────────────────────────────────────────────────────────────────────────────────────┐
+│mnemo v0.9.2  ·  projet mnemo  ·  branche main  ·  total 6                                       │
+│Recherche (tapez pour filtrer)▏                                                                  │
+│Filtres [aucun filtre]                                                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Synthèse ────────────────────────────────────────────────────────────────────────────────────┐
+│Total 6   Visibles 6   Succès 4   Échecs 2   Taux d'échec 33.3%   Projets 2   Shell bash         │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
+┌ Commandes (6) ─────────────────────────────────────────┐┌ Détails ───────────────────────────┐
+│> 17:29  ✓ mnemo          cargo build --release --locked ││COMMAND                              │
+│  17:24  ✓ mnemo          cargo clippy --all-targets --… ││cargo build --release --locked       │
+│  17:20  ✗ mnemo          cargo test --locked            ││statut     SUCCESS                   │
+│  17:18  ✓ mnemo          git push origin feat/tui       ││                                     │
+│  16:58  ✓ infra          docker compose up -d           ││CONTEXT                              │
+│  16:40  ✗ infra          terraform apply                ││cwd        /home/dev/mnemo           │
+└────────────────────────────────────────────────────────┘└─────────────────────────────────────┘
+ [Enter] sélection  [Tab] détails  [Ctrl+P/B/D] filtrer  [Ctrl+L] clear  [F1] aide  [Esc] quitter
 ```
+
+> Pour une capture d'écran réelle (PNG), voir [docs/assets/README.md](docs/assets/README.md)
+> qui décrit comment la générer ; aucune image binaire n'est versionnée par défaut.
 
 Mode non interactif (scripts / CI) :
 
@@ -77,14 +96,23 @@ cargo test
 cargo clippy
 ```
 
-Touches de la TUI :
+Raccourcis principaux de la TUI :
 
 | Touche | Action |
 | --- | --- |
-| *(saisie)* | filtre fuzzy en temps réel |
-| `↑` / `↓` | navigation dans la liste |
-| `Entrée` | imprime la commande sélectionnée sur stdout |
-| `Esc` / `Ctrl+C` | quitte sans rien imprimer |
+| *(saisie)* | filtre fuzzy en temps réel (mode recherche) |
+| `↑` / `↓` ou `k` / `j` | navigation dans la liste |
+| `Tab` | bascule le focus liste / détails |
+| `/` | revenir au focus recherche |
+| `Entrée` | imprime la commande sélectionnée sur stdout, puis quitte |
+| `y` / `c` | copier la commande |
+| `e` | exporter les résultats filtrés en JSON |
+| `x` / `d` | supprimer (avec sauvegarde préalable) |
+| `f` | statut : tous / succès / échecs |
+| `Ctrl+P` / `Ctrl+B` / `Ctrl+D` | filtrer par projet / branche / dossier |
+| `Ctrl+L` | effacer tous les filtres |
+| `F1` / `?` | aide |
+| `Esc` / `Ctrl+C` | quitter sans rien imprimer |
 
 ---
 
@@ -403,13 +431,22 @@ mnemo tui --cwd /home/killian/mnemo
 mnemo tui --failed               # uniquement les commandes en échec
 ```
 
-### Trois zones
+### Quatre zones (dashboard ops)
 
-- **Haut** : barre de recherche (frappe en direct) + filtres actifs.
-- **Gauche** : liste des commandes (date, statut `✓`/`✗`, commande).
-- **Droite** : détails de la sélection (`id`, `command`, `cwd`, `shell`,
-  `hostname`, `exit_code`, `created_at`, `git_root`, `git_branch`,
-  `git_remote`, `session_id`).
+- **Barre de commande** (haut) : badges d'identité (`mnemo` + version + projet +
+  branche + total), barre de recherche (frappe en direct), puces de filtres
+  actifs (`[projet: …]`, `[branche: …]`, `[statut: échecs]`, `[dossier: …]` ou
+  `[aucun filtre]`).
+- **Synthèse / KPI** : `Total`, `Visibles`, `Succès`, `Échecs`, `Taux d'échec`,
+  `Projets` et shell dominant (masquée sur terminal court).
+- **Corps** : liste des commandes (heure, statut `✓`/`✗`, contexte projet/dossier,
+  commande tronquée) à gauche ; détails de la sélection à droite, organisés en
+  sections **COMMAND / CONTEXT / EXECUTION / GIT / METADATA** (masqué sur
+  terminal étroit).
+- **Pied** : raccourcis essentiels et message de statut.
+
+L'affichage est **responsive** : la synthèse et le panneau de détails se
+masquent automatiquement sur les petits terminaux, sans jamais paniquer.
 
 ### Deux contextes de saisie
 
@@ -1229,22 +1266,87 @@ cosign verify-blob-attestation \
 
 ---
 
+## Compatibilité
+
+| Élément | État |
+| --- | --- |
+| **OS principal** | Linux (x86-64), y compris **WSL2** |
+| **Shell** | Bash (hook d'enregistrement `PROMPT_COMMAND`) |
+| **Binaire** | statique `x86_64-unknown-linux-musl` pour les releases |
+| **macOS** | compile depuis les sources, **non testé en continu** |
+| **Windows natif** | non visé (utiliser WSL) |
+| **Zsh / Fish** | recherche utilisable, hook d'enregistrement non fourni |
+
+mnemo est conçu et validé pour **Linux / WSL avec Bash**. Les autres
+environnements peuvent fonctionner mais ne bénéficient pas de la CI ni de
+garanties. Le détail des garanties figure dans
+[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+---
+
+## Compatibilité et stabilité
+
+Avant la v1.0, la surface CLI peut encore évoluer (ajustements d'options ou de
+messages). À partir de la **v1.0**, mnemo suit le **versionnage sémantique** :
+
+- changement incompatible (commande/option retirée, format de sortie cassé) →
+  version **majeure** ;
+- nouvelle commande ou option rétrocompatible → version **mineure** ;
+- correction de bug ou de sécurité sans rupture → version **corrective**.
+
+Garanties visées à partir de la v1.0 :
+
+- **Base de données** : migrée automatiquement vers le schéma courant ; mnemo
+  **refuse** une base créée par une version plus récente plutôt que de la
+  corrompre.
+- **Sorties JSON** (`search --json`, `stats --json`, `doctor --json`,
+  `export`) : structure stable et versionnée ; les ajouts se font par champs
+  additionnels.
+- **Codes de sortie** : `0` succès, `0` pour `doctor` sain ou avec
+  avertissements seulement, `1` si `doctor` détecte une erreur, code non nul
+  pour les erreurs CLI, configuration invalide ou vérification de signature
+  stricte en échec.
+
+Détails complets : [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md).
+
+---
+
 ## Architecture & diagrammes
 
 ### Modules
 
 ```text
 src/
-├── main.rs       # point d'entrée + dispatch CLI
-├── cli.rs        # définitions Clap
-├── config.rs     # chemins XDG + chargement/écriture TOML
-├── db.rs         # schéma SQLite, insert, search, hash, horodatage
-├── importer.rs   # import de ~/.bash_history
-├── filter.rs     # détection des commandes sensibles
-├── doctor.rs     # diagnostic de l'installation (mnemo doctor)
-├── version.rs    # informations de version/build (mnemo version)
-├── tui.rs        # interface Ratatui + filtre fuzzy partagé
-└── shell.rs      # génération du snippet Bash + helpers .bashrc
+├── main.rs        # point d'entrée + dispatch CLI
+├── cli.rs         # définitions Clap (sous-commandes et options)
+├── config.rs      # chemins XDG, TOML, durcissement des permissions (600)
+├── db.rs          # schéma SQLite, insert, recherche filtrée, hash
+├── migrations.rs  # migrations de schéma versionnées
+├── importer.rs    # import de ~/.bash_history
+├── filter.rs      # détection des commandes sensibles
+├── gitctx.rs      # détection du contexte projet / branche Git
+├── project.rs     # nom de projet courant et projets connus
+├── stats.rs       # statistiques d'usage (texte / JSON)
+├── export.rs      # export JSON (+ gzip) des résultats
+├── backup.rs      # sauvegardes horodatées (création centralisée)
+├── archive.rs     # lecture / écriture des archives de sauvegarde
+├── prune.rs       # nettoyage par ancienneté
+├── maintenance.rs # maintenance automatique (status / run / dry-run)
+├── list.rs        # listing et suppression d'entrées
+├── confirm.rs     # confirmations interactives sûres
+├── lifecycle.rs   # update / upgrade / uninstall (+ lifecycle/)
+├── doctor.rs      # diagnostic de l'installation (mnemo doctor)
+├── version.rs     # informations de version / build
+├── shell.rs       # génération du snippet Bash + helpers .bashrc
+└── tui/           # interface Ratatui (dashboard ops)
+    ├── ui.rs       # rendu (barre de commande, synthèse, liste, détails)
+    ├── theme.rs    # palette et styles centralisés
+    ├── format.rs   # helpers de formatage purs et testables
+    ├── app.rs      # modèle et logique (navigation, filtres, KPI)
+    ├── events.rs   # mapping clavier -> action
+    ├── actions.rs  # actions et accès base isolé (trait)
+    ├── help.rs     # texte d'aide
+    └── clipboard.rs # copie système optionnelle
 scripts/
 ├── install.sh         # installation (locale ou distante)
 ├── uninstall.sh       # désinstallation
@@ -1255,23 +1357,22 @@ scripts/
 └── lib/bashrc.sh      # logique .bashrc partagée (et testée)
 ```
 
-### Architecture globale
+### Architecture locale
 
 ```mermaid
-flowchart TD
-    User([Utilisateur]) --> CLI["main.rs / cli.rs (Clap)"]
-    CLI -->|init| Config["config.rs"]
-    CLI -->|import| Importer["importer.rs"]
-    CLI -->|add| Filter["filter.rs"]
-    CLI -->|search| TUI["tui.rs"]
-    CLI -->|bashrc| Shell["shell.rs"]
-
-    Importer --> Filter
+flowchart LR
+    Shell([Bash + hook]) -->|mnemo add| Filter["filter.rs<br/>(commandes sensibles)"]
+    Git["gitctx.rs<br/>(projet / branche)"] --> Filter
     Filter --> DB["db.rs"]
-    TUI --> DB
-    Config --> DB
+    Config["config.rs<br/>(TOML, 600)"] --> DB
     DB --> SQLite[("SQLite history.db")]
-    Shell --> Bashrc["~/.bashrc"]
+    SQLite --> Search["search / tui.rs"]
+    SQLite --> Stats["stats.rs"]
+    SQLite --> Export["export.rs"]
+    SQLite --> Backup["backup.rs"]
+    Search --> User([Utilisateur])
+    Stats --> User
+    Export --> User
 ```
 
 ### Flux : enregistrement d'une commande Bash vers SQLite
@@ -1354,12 +1455,17 @@ erDiagram
         TEXT    hostname
         INTEGER exit_code
         TEXT    created_at "NOT NULL"
+        TEXT    git_root
+        TEXT    git_branch
+        TEXT    git_remote
+        TEXT    session_id
         TEXT    hash "UNIQUE"
     }
 ```
 
 Le dédoublonnage repose sur `hash` (FNV-1a 64 bits sur `command` + `cwd`) avec
-contrainte `UNIQUE` et `INSERT OR IGNORE`.
+contrainte `UNIQUE` et `INSERT OR IGNORE`. Les colonnes de contexte Git et de
+session sont ajoutées par des migrations versionnées (voir `migrations.rs`).
 
 ### Cycle d'installation
 
@@ -1376,6 +1482,71 @@ flowchart LR
     F -->|non| H
     G --> H["Resume final"]
     H --> I([source ~/.bashrc])
+```
+
+### Cycle de vie : `update` et `upgrade`
+
+```mermaid
+sequenceDiagram
+    participant U as Utilisateur
+    participant M as mnemo update/upgrade
+    participant R as GitHub Releases
+    participant FS as ~/.local/bin
+
+    U->>M: mnemo update
+    M->>R: dernière version publiée ?
+    R-->>M: version + assets
+    alt déjà à jour
+        M-->>U: rien à faire
+    else nouvelle version
+        M-->>U: propose la mise à jour
+        U->>M: mnemo upgrade
+        M->>R: télécharge binaire + SHA-256 (+ bundle cosign)
+        M->>M: vérifie SHA-256 (et signature si demandé)
+        alt vérification OK
+            M->>FS: remplace le binaire atomiquement
+            M-->>U: installé
+        else vérification KO
+            M-->>U: refuse, ne remplace rien (exit ≠ 0)
+        end
+    end
+```
+
+### Chaîne d'approvisionnement de release
+
+```mermaid
+flowchart TD
+    Tag([Tag de version]) --> CI["Workflow release.yml"]
+    CI --> Build["cargo build --release --locked"]
+    Build --> Pkg["Archive de release"]
+    Pkg --> Sha["SHA-256 des assets"]
+    Pkg --> Sbom["SBOM CycloneDX"]
+    Pkg --> Sign["Signatures cosign keyless"]
+    Sign --> Prov["Provenance SLSA"]
+    Sha --> Pub["Publication GitHub Release"]
+    Sbom --> Pub
+    Prov --> Pub
+    Pub --> Verify{Vérification côté client}
+    Verify -->|SHA-256| Ok([Installation autorisée])
+    Verify -->|cosign strict| Ok
+    Verify -->|échec| Refus([Installation refusée])
+```
+
+### Cycle de vie des données
+
+```mermaid
+flowchart LR
+    Cmd([Commande exécutée]) --> Add["mnemo add"]
+    Add --> DB[("SQLite history.db")]
+    DB --> Search["recherche / TUI"]
+    DB --> Backup["mnemo backup"]
+    Backup --> Arch[("Archives horodatées")]
+    Arch --> Restore["mnemo restore"]
+    Restore --> DB
+    DB --> Prune["maintenance / prune<br/>(ancienneté)"]
+    Prune -->|sauvegarde préalable| Arch
+    Prune --> DB
+    DB --> Export["mnemo export (JSON / gzip)"]
 ```
 
 ### Flux : diagnostic `mnemo doctor`
@@ -1406,31 +1577,45 @@ flowchart TD
 
 ---
 
-## Limites du MVP
+## Limites connues
 
 - Pas d'horodatage par commande à l'import : toutes les lignes de
   `.bash_history` reçoivent l'heure de l'import (Bash ne stocke les dates que si
   `HISTTIMEFORMAT` est actif).
 - Recherche fuzzy en mémoire (chargement jusqu'à `search_limit`, 5000 par
   défaut) - pas de pagination côté base.
-- Bash uniquement (pas de Zsh/Fish), pas de recherche plein-texte SQLite (FTS),
-  pas de filtre par `cwd` / code de sortie dans la TUI.
+- Bash uniquement (le hook d'enregistrement ne couvre pas encore Zsh / Fish) ;
+  pas de recherche plein-texte SQLite (FTS).
 - Hash de dédoublonnage non cryptographique (FNV-1a) - adapté au dédoublonnage,
   pas à la sécurité.
+- Cible validée : Linux / WSL. macOS et Windows ne sont pas testés en continu
+  (voir [Compatibilité](#compatibilité)).
 
 ---
 
 ## Roadmap
 
+Voir aussi [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) pour les garanties de
+stabilité visées à partir de la v1.0.
+
 - [x] Commande `mnemo doctor` (diagnostic, `--fix`, `--json`).
+- [x] Filtres TUI : par projet, branche, répertoire, statut (succès / échecs).
+- [x] Commande `mnemo stats` (texte et JSON).
+- [x] Suppression d'entrées (avec sauvegarde) et export JSON / gzip.
+- [x] Sauvegardes, restauration et maintenance par ancienneté.
+- [x] TUI « ops dashboard » (synthèse / KPI, détails sectionnés, palette).
 - [ ] Timestamps réels par commande (capture dans le hook Bash).
-- [ ] Filtres TUI : par répertoire, code de sortie, plage de dates.
 - [ ] Aperçu multi-lignes et coloration syntaxique dans la TUI.
-- [ ] Commande `mnemo stats` (commandes les plus fréquentes, etc.).
-- [ ] Édition / suppression d'entrées, export JSON/CSV.
 - [ ] Support Zsh / Fish.
 - [ ] FTS5 SQLite pour de très gros historiques.
-- [ ] Chiffrement optionnel de la base (post-MVP, toujours local).
+- [ ] Chiffrement optionnel de la base (toujours local).
+
+### Vers la v1.0
+
+- Stabilisation de la surface CLI et des sorties JSON (voir
+  [Compatibilité et stabilité](#compatibilité-et-stabilité)).
+- Documentation de compatibilité et codes de sortie consolidée.
+- Capture d'écran officielle de la TUI dans `docs/assets/`.
 
 ---
 
