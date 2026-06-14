@@ -9,6 +9,8 @@
 
 <video src="docs/assets/mnemo-tui.mp4" controls width="100%"></video>
 
+https://github.com/user-attachments/assets/d7deb152-1e8d-48cd-8297-53a81798835d
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 ```
