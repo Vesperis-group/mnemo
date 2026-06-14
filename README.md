@@ -225,13 +225,36 @@ shell.
 ### `mnemo update` - y a-t-il du nouveau ?
 
 ```bash
-mnemo update          # compare version installée et dernière release
-mnemo update --json   # sortie machine
+mnemo update                 # compare version installée et dernière release
+mnemo update --json          # sortie machine (vérification seule)
+mnemo update --upgrade       # enchaîne l'upgrade si une mise à jour existe
+mnemo update --upgrade --yes # idem, sans confirmation (automatisation)
 ```
 
-N'installe **rien** : interroge l'API GitHub Releases (pré-releases ignorées) et
-affiche la version installée, la dernière version et si une mise à jour est
-disponible. Exemple JSON :
+Interroge l'API GitHub Releases (pré-releases ignorées) et affiche la version
+installée, la dernière version et si une mise à jour est disponible.
+
+**En terminal interactif**, lorsqu'une mise à jour est disponible, `mnemo update`
+propose de l'installer immédiatement :
+
+```text
+Mise à jour disponible ✓
+Installer maintenant avec `mnemo upgrade` ? [o/N]
+```
+
+La réponse par défaut (`Entrée`) est **non** ; répondre `o`/`oui`/`y`/`yes`
+enchaîne directement `mnemo upgrade` (vérification SHA-256, sauvegarde et
+remplacement atomique, sans seconde confirmation). **En mode non interactif**
+(CI, script, cron, pipe) ou avec `--json`, `update` reste une simple
+vérification et n'installe **rien** : il se contente d'indiquer `Lancez
+`mnemo upgrade` pour l'installer.`
+
+L'option `--upgrade` lance l'installation sans poser la question de `update` ;
+sans `--yes`, c'est `mnemo upgrade` qui demande sa confirmation finale (un seul
+prompt). `--upgrade --yes` permet un upgrade entièrement automatisé. Aucune
+installation n'a lieu sans consentement.
+
+Exemple JSON :
 
 ```json
 {
@@ -312,7 +335,7 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo prune --older-than <durée> [--project <nom>] [--branch <branche>] [--dry-run] [--yes]` | Nettoie les commandes anciennes (`30d`, `12w`, `6m`, `1y`). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
-| `mnemo update [--json]` | Vérifie si une nouvelle version est disponible (n'installe **rien**). |
+| `mnemo update [--json] [--upgrade] [--yes]` | Vérifie si une nouvelle version est disponible. En terminal interactif, propose l'installation immédiate ; `--upgrade` enchaîne `mnemo upgrade` (avec `--yes` pour l'automatisation). Sans terminal ou avec `--json`, n'installe **rien**. |
 | `mnemo upgrade [--dry-run] [--yes] [--version <vX.Y.Z>] [--target <triplet>]` | Télécharge et installe la dernière version (vérif. SHA-256, remplacement atomique). |
 | `mnemo uninstall [--dry-run] [--yes] [--purge]` | Désinstalle mnemo. **Conserve les données** sauf `--purge`. |
 

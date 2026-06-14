@@ -203,10 +203,22 @@ pub enum Command {
     Version,
 
     /// Vérifie si une nouvelle version est disponible (sans rien installer).
+    ///
+    /// En terminal interactif, si une mise à jour existe, propose de lancer
+    /// `mnemo upgrade` immédiatement (réponse par défaut : non). En mode non
+    /// interactif (CI, script, cron, pipe), reste une simple vérification.
+    /// `--upgrade` enchaîne directement l'installation quand une mise à jour est
+    /// disponible ; combiné à `--yes`, il permet un upgrade automatisé.
     Update {
-        /// Sortie au format JSON.
+        /// Sortie au format JSON (vérification seule, sans proposition).
         #[arg(long)]
         json: bool,
+        /// Si une mise à jour est disponible, lance directement `mnemo upgrade`.
+        #[arg(long)]
+        upgrade: bool,
+        /// Avec `--upgrade`, installe sans confirmation interactive.
+        #[arg(long)]
+        yes: bool,
     },
 
     /// Télécharge et installe la dernière version stable (remplace le binaire).
