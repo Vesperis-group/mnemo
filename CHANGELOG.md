@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.2.1](https://github.com/Vesperis-group/mnemo/compare/v0.2.0...v0.2.1) (2026-06-14)
+
+### Bug Fixes
+
+* normalise les statistiques de commandes ([419cdc6](https://github.com/Vesperis-group/mnemo/commit/419cdc653e126bd00ab69ad52e9149ab3b4b7e98))
+
 ## [0.2.0](https://github.com/Vesperis-group/mnemo/compare/v0.1.2...v0.2.0) (2026-06-14)
 
 ### Features
