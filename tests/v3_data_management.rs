@@ -171,6 +171,62 @@ fn restore_refuse_une_archive_invalide() {
     assert!(!out.status.success());
 }
 
+/// Construit une archive `.tar.gz` contenant une entrée dont le nom est écrit
+/// directement dans le header (pour simuler une archive malveillante que le
+/// builder tar refuserait normalement de produire).
+fn evil_archive(path: &Path, entry_name: &str) {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    let data = b"evil";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(data.len() as u64);
+    header.set_mode(0o644);
+    header.set_entry_type(tar::EntryType::Regular);
+    {
+        let gnu = header.as_gnu_mut().unwrap();
+        let b = entry_name.as_bytes();
+        gnu.name[..b.len()].copy_from_slice(b);
+    }
+    header.set_cksum();
+    let enc = GzEncoder::new(std::fs::File::create(path).unwrap(), Compression::default());
+    let mut builder = tar::Builder::new(enc);
+    builder.append(&header, &data[..]).unwrap();
+    builder.into_inner().unwrap().finish().unwrap();
+}
+
+#[test]
+fn restore_refuse_path_traversal_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    setup(home, &["a"]);
+
+    let evil = home.join("evil.tar.gz");
+    evil_archive(&evil, "../evil.txt");
+    let out = run(home, &["restore", evil.to_str().unwrap(), "--yes"]);
+    assert!(
+        !out.status.success(),
+        "restore doit refuser une archive avec `..`"
+    );
+    // Aucune écriture hors du dossier d'extraction.
+    assert!(!std::env::temp_dir().join("evil.txt").exists());
+}
+
+#[test]
+fn restore_refuse_chemin_absolu() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    setup(home, &["a"]);
+
+    let evil = home.join("evil-abs.tar.gz");
+    evil_archive(&evil, "/tmp/mnemo-evil-abs.txt");
+    let out = run(home, &["restore", evil.to_str().unwrap(), "--yes"]);
+    assert!(
+        !out.status.success(),
+        "restore doit refuser une archive à chemin absolu"
+    );
+    assert!(!Path::new("/tmp/mnemo-evil-abs.txt").exists());
+}
+
 #[test]
 fn restore_cree_un_backup_avant_remplacement() {
     let dir = tempfile::tempdir().unwrap();

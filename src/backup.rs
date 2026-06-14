@@ -20,7 +20,6 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{config, confirm, db, migrations};
-
 /// Métadonnées embarquées dans `metadata.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackupMetadata {
@@ -215,8 +214,8 @@ fn extract_archive(archive: &Path) -> Result<ExtractedBackup> {
     let file = File::open(archive)
         .with_context(|| format!("ouverture de l'archive {}", archive.display()))?;
     let dec = GzDecoder::new(file);
-    let mut ar = tar::Archive::new(dec);
-    ar.unpack(&dir)
+    let ar = tar::Archive::new(dec);
+    crate::archive::safe_unpack(ar, &dir)
         .with_context(|| format!("extraction de l'archive {}", archive.display()))?;
 
     let db = dir.join("history.db");

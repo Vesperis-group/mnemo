@@ -1,0 +1,51 @@
+# Configuration de cargo-deny pour mnemo.
+# https://embarkstudios.github.io/cargo-deny/
+#
+# Politique : refuser les vulnérabilités RustSec, n'autoriser que des licences
+# permissives compatibles, et signaler les dépendances multiples / sources
+# inattendues. Lancé par `make audit` et la CI (.github/workflows/audit.yml).
+
+[advisories]
+# Base d'avis RustSec. Toute vulnérabilité connue fait échouer la vérification.
+version = 2
+yanked = "warn"
+# Aucune exception pour l'instant. En ajouter ici (avec justification) si une
+# dépendance transitive est temporairement non corrigeable :
+ignore = []
+
+[licenses]
+version = 2
+# Licences explicitement autorisées (permissives, compatibles avec un binaire
+# distribué). Toute licence hors de cette liste fait échouer la vérification.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+]
+# Seuil de confiance pour la détection de licence par cargo-deny.
+confidence-threshold = 0.8
+
+# Exceptions de licence documentées (aucune pour l'instant). Format :
+# { allow = ["..."], name = "crate", version = "*" }
+exceptions = []
+
+[bans]
+# Signale les versions multiples d'une même dépendance (poids / surface).
+multiple-versions = "warn"
+# Refuse les wildcards de version dans nos propres dépendances.
+wildcards = "deny"
+allow = []
+deny = []
+
+[sources]
+# N'autorise que crates.io comme registre par défaut.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
