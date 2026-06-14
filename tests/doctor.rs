@@ -256,3 +256,132 @@ fn init_cree_config_et_db_en_600() {
     assert_eq!(mode_of(&config), 0o600);
     assert_eq!(mode_of(&db), 0o600);
 }
+
+// --- v0.9.2 : permissions des sauvegardes existantes -----------------------
+
+#[cfg(unix)]
+fn backups_dir(home: &Path) -> std::path::PathBuf {
+    home.join(".local/share/mnemo/backups")
+}
+
+/// Crée `n` archives de sauvegarde et renvoie leurs chemins.
+#[cfg(unix)]
+fn make_backups(home: &Path, n: usize) -> Vec<std::path::PathBuf> {
+    for _ in 0..n {
+        assert!(run(home, &["backup"]).status.success());
+    }
+    let archives: Vec<_> = std::fs::read_dir(backups_dir(home))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.to_string_lossy().ends_with(".tar.gz"))
+        .collect();
+    assert_eq!(archives.len(), n, "il devrait y avoir {n} archive(s)");
+    archives
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_signale_backups_trop_ouverts() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+    let archives = make_backups(home, 3);
+    for a in &archives {
+        chmod(a, 0o644);
+    }
+
+    let out = run(home, &["doctor"]);
+    assert_eq!(out.status.code(), Some(0)); // WARN, pas bloquant
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Backups trop ouverts : 3 fichier(s), attendu 600"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_aucun_warning_backups_si_dossier_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+    // Pas de `backup` : le dossier backups n'existe pas.
+    assert!(!backups_dir(home).exists());
+
+    let out = run(home, &["doctor"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(!stdout.contains("Backups trop ouverts"));
+    assert!(!stdout.contains("Sauvegardes :"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_aucun_warning_backups_si_tous_en_600() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+    make_backups(home, 2); // créés en 600 par défaut
+
+    let out = run(home, &["doctor"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(!stdout.contains("Backups trop ouverts"));
+    assert!(stdout.contains("Sauvegardes : 2 archive(s) en 600"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_fix_corrige_les_backups_existants() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+    let archives = make_backups(home, 3);
+    for a in &archives {
+        chmod(a, 0o644);
+    }
+
+    let out = run(home, &["doctor", "--fix"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Permissions corrigées : 3 backup(s) → 600"));
+    for a in &archives {
+        assert_eq!(mode_of(a), 0o600, "archive {} non corrigée", a.display());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_fix_compte_les_corrections_backups_dans_le_resume() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+    let archives = make_backups(home, 2);
+    for a in &archives {
+        chmod(a, 0o644);
+    }
+
+    let out = run(home, &["doctor", "--fix"]);
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    // Le résumé final compte au moins le FIX des backups.
+    assert!(stdout.contains("Corrections appliquées :"));
+    assert!(stdout.contains("backup(s) → 600"));
+    // Au moins un statut FIX dans le résumé agrégé.
+    assert!(stdout.contains("FIX"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_fix_reporte_explicitement_la_db() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let db = home.join(".local/share/mnemo/history.db");
+    chmod(&db, 0o644);
+
+    let out = run(home, &["doctor", "--fix"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    // La correction de la DB doit être explicitement rapportée (pas silencieuse).
+    assert!(stdout.contains("history.db → 600"));
+    assert_eq!(mode_of(&db), 0o600);
+}

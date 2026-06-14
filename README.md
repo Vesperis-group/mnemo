@@ -854,7 +854,9 @@ mnemo doctor --json   # sortie JSON exploitable (scripts / CI)
 - `HISTTIMEFORMAT` - information si non configuré.
 - Permissions des fichiers sensibles : la config, la base et les sauvegardes
   doivent être privées (`600`). Toute permission plus ouverte (`644`, `664`…)
-  est signalée en `WARN`.
+  est signalée en `WARN`. Les archives de sauvegarde trop ouvertes sont
+  rapportées de façon **agrégée** (un seul résumé, sans lister chaque fichier) :
+  `[WARN ] Backups trop ouverts : 9 fichier(s), attendu 600`.
 
 ### Statuts et code retour
 
@@ -874,6 +876,10 @@ Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]`, `[INFO]` ou `[FIX]`.
 - crée la base si absente ;
 - resserre les permissions trop ouvertes de la config et de la base à `600`
   (lecture/écriture propriétaire uniquement, `[FIX]`) ;
+- resserre à `600` les **archives de sauvegarde existantes** trop ouvertes,
+  avec un résumé unique `[FIX  ] Permissions corrigées : 9 backup(s) → 600`
+  (le contenu des archives n'est jamais modifié, aucune archive n'est
+  supprimée) ;
 - ajoute le bloc mnemo au `.bashrc` si absent, **supprime les doublons** et
   **restaure le raccourci `Ctrl+R`** s'il a disparu (**toujours avec
   sauvegarde** du `.bashrc` avant modification) ;

@@ -65,7 +65,7 @@ impl SearchFilter {
 ///
 /// Tous les critères sont **combinables** (ET logique). Les champs temporels
 /// `since`/`before` sont des bornes au format `YYYY-MM-DD HH:MM:SS` (ou un
-/// préfixe `YYYY-MM-DD`), comparées lexicographiquement à `created_at` — ce qui
+/// préfixe `YYYY-MM-DD`), comparées lexicographiquement à `created_at` - ce qui
 /// équivaut à une comparaison chronologique grâce au format ISO trié.
 #[derive(Debug, Clone, Default)]
 pub struct QueryFilter {
@@ -91,7 +91,7 @@ impl QueryFilter {
     /// Construit le fragment `WHERE` et les paramètres liés associés.
     ///
     /// La clause est toujours valide (au minimum `1=1`), et chaque critère est
-    /// passé en paramètre lié — jamais interpolé — pour éviter toute injection.
+    /// passé en paramètre lié - jamais interpolé - pour éviter toute injection.
     fn build_where(&self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
         let mut clauses: Vec<String> = Vec::new();
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -513,7 +513,7 @@ fn now_secs() -> u64 {
 }
 
 /// Résout une borne inférieure `--since` : durée (`7d`, `2w`, `3m`, `1y`) ou
-/// date `AAAA-MM-JJ`. Renvoie `None` si la spec est invalide — **jamais de
+/// date `AAAA-MM-JJ`. Renvoie `None` si la spec est invalide - **jamais de
 /// panique** : l'appelant peut alors ignorer le filtre proprement.
 pub fn resolve_since(spec: &str) -> Option<String> {
     let spec = spec.trim();

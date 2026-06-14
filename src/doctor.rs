@@ -10,7 +10,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::{config, db, migrations, shell};
+use crate::{backup, config, db, migrations, shell};
 
 /// Niveau de chaque contrôle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -148,6 +148,11 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
     // 2. Base de données (création du schéma si absente).
     let db_path = config::db_path()?;
     let db_existait = db_path.exists();
+    // `db::open` durcit silencieusement la base à 600 ; on capture donc l'état
+    // des permissions AVANT ouverture pour pouvoir rapporter explicitement la
+    // correction dans le résumé.
+    #[cfg(unix)]
+    let db_trop_ouverte = db_existait && is_too_open(&db_path);
     db::open(&db_path)?;
     if db_existait {
         report.push("fix.db", Status::Info, "Base de données déjà présente");
@@ -162,9 +167,26 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
 
     // 3. Permissions trop permissives sur la config et la base (chmod 600).
     fixes += fix_permissions(report, "fix.config.perms", &cfg_path);
-    fixes += fix_permissions(report, "fix.db.perms", &db_path);
+    // La base a déjà été resserrée par `db::open` : on rend la correction
+    // explicite plutôt que silencieuse.
+    #[cfg(unix)]
+    if db_trop_ouverte {
+        report.push(
+            "fix.db.perms",
+            Status::Fix,
+            format!("Permissions corrigées : {} → 600", db_path.display()),
+        );
+        fixes += 1;
+    }
+    #[cfg(not(unix))]
+    {
+        fixes += fix_permissions(report, "fix.db.perms", &db_path);
+    }
 
-    // 4. Bloc .bashrc : ajout / déduplication / restauration du Ctrl+R.
+    // 4. Sauvegardes existantes trop ouvertes (chmod 600, résumé unique).
+    fixes += fix_backups_permissions(report);
+
+    // 5. Bloc .bashrc : ajout / déduplication / restauration du Ctrl+R.
     if let Some(bashrc) = bashrc_path() {
         match shell::repair_block(&bashrc) {
             Ok(shell::BlockRepair::Created) => {
@@ -204,7 +226,7 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
         }
     }
 
-    // 5. PATH : message clair, jamais de modification automatique.
+    // 6. PATH : message clair, jamais de modification automatique.
     if let Some(local_bin) = local_bin_dir() {
         if !path_contains(&local_bin) {
             report.push(
@@ -268,6 +290,52 @@ fn fix_permissions(report: &mut Report, name: &str, path: &Path) -> usize {
     }
 }
 
+/// Indique si un fichier est accessible au groupe ou aux autres (mode `0o077`).
+#[cfg(unix)]
+fn is_too_open(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .map(|m| m.permissions().mode() & 0o077 != 0)
+        .unwrap_or(false)
+}
+
+/// Resserre à `600` toutes les archives de sauvegarde trop ouvertes.
+///
+/// Best-effort et non destructif : ne lit ni ne modifie le contenu des
+/// archives, ne supprime rien, n'échoue pas si le dossier `backups` est absent.
+/// Pousse un unique résumé `[FIX]` indiquant le nombre d'archives corrigées et
+/// retourne `1` si au moins une correction a eu lieu (pour le compteur global).
+fn fix_backups_permissions(report: &mut Report) -> usize {
+    #[cfg(unix)]
+    {
+        let Ok(dir) = backup::backups_dir() else {
+            return 0;
+        };
+        let archives = backup::list_archives(&dir);
+        let mut corrected = 0usize;
+        for archive in &archives {
+            if is_too_open(archive) {
+                config::harden_file(archive);
+                corrected += 1;
+            }
+        }
+        if corrected == 0 {
+            return 0;
+        }
+        report.push(
+            "fix.backups.perms",
+            Status::Fix,
+            format!("Permissions corrigées : {corrected} backup(s) → 600"),
+        );
+        1
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = report;
+        0
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Contrôles de diagnostic (lecture seule).
 // ---------------------------------------------------------------------------
@@ -277,6 +345,7 @@ fn collect_checks(report: &mut Report) -> Result<()> {
     check_local_bin_path(report);
     check_config(report)?;
     check_database(report)?;
+    check_backups(report);
     check_bashrc(report);
     check_shell(report);
     check_histtimeformat(report);
@@ -426,6 +495,42 @@ fn check_database(report: &mut Report) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Contrôle (lecture seule) des permissions des archives de sauvegarde.
+///
+/// Non bruyant : n'affiche rien si aucune archive n'existe, un résumé `OK`
+/// discret si toutes sont en `600`, et un unique résumé `WARN` agrégé (sans
+/// lister chaque fichier) si certaines sont trop ouvertes.
+fn check_backups(report: &mut Report) {
+    #[cfg(unix)]
+    {
+        let Ok(dir) = backup::backups_dir() else {
+            return;
+        };
+        let archives = backup::list_archives(&dir);
+        if archives.is_empty() {
+            return;
+        }
+        let open = archives.iter().filter(|p| is_too_open(p)).count();
+        if open > 0 {
+            report.push(
+                "backups.perms",
+                Status::Warn,
+                format!("Backups trop ouverts : {open} fichier(s), attendu 600"),
+            );
+        } else {
+            report.push(
+                "backups.perms",
+                Status::Ok,
+                format!("Sauvegardes : {} archive(s) en 600", archives.len()),
+            );
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = report;
+    }
 }
 
 /// Vérifie la version du schéma SQLite (`PRAGMA user_version`) sans jamais
