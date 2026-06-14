@@ -168,6 +168,29 @@ si un seul contrôle critique échoue** :
   - **Outils d'audit Cargo** : `cargo-audit`, `cargo-deny`, `cargo-machete` sont
     installés en version exacte (`--version X.Y.Z --locked`) et leurs versions
     sont affichées en CI.
+  - **Outils d'intégrité d'artefacts** : `cargo-cyclonedx` (SBOM) est installé
+    en version exacte (`--version 0.5.9 --locked`) ; `cosign` (signature +
+    provenance) est installé depuis un binaire dont l'empreinte SHA-256 est
+    vérifiée (version `v3.1.1` épinglée). Leurs versions sont affichées en CI.
+- **SBOM, signatures et provenance des artefacts.** Le job `publish` produit,
+  via les hooks `after:bump` de release-it (donc **avant** la création de la
+  release) :
+  - un **SBOM CycloneDX JSON** (`scripts/generate-sbom.sh`, `cargo-cyclonedx`),
+    validé (champs `bomFormat`/`specVersion`/`components`) et accompagné de son
+    empreinte SHA-256 ;
+  - un fichier de **checksums agrégés** couvrant les deux archives et le SBOM
+    (`scripts/checksums-release.sh`), vérifié avant signature ;
+  - pour chaque artefact, une **signature `cosign`** (keyless, OIDC ambiant
+    GitHub Actions — aucun secret long terme) et une **attestation de
+    provenance SLSA v1** (`cosign attest-blob`), toutes deux **re-vérifiées**
+    par `cosign verify-blob` / `verify-blob-attestation`
+    (`scripts/sign-release.sh`).
+
+  Ces étapes sont **fail-close** (`set -euo pipefail`) : tout échec de
+  génération, de signature, d'attestation ou de vérification interrompt
+  release-it, donc **aucune release n'est créée**. Le keyless requiert
+  `id-token: write`, accordé uniquement au job `publish`. Les bundles Sigstore
+  (`*.sigstore.json`, `*.provenance.sigstore.json`) sont attachés à la Release.
 - **Runners épinglés.** Les workflows utilisent `ubuntu-24.04` (et
   `ubuntu-22.04` là où le lien glibc 2.35 de l'asset GNU l'impose) plutôt que
   `ubuntu-latest`. Ces images GitHub restent maintenues et moins flottantes que
@@ -175,7 +198,8 @@ si un seul contrôle critique échoue** :
   résiduelle assumée (cf. § risques résiduels).
 - **Téléchargements vérifiés.** Le binaire `gitleaks` est épinglé en version et
   son empreinte SHA-256 est contrôlée avant exécution (pas de `curl | bash`, pas
-  d'installation sans checksum).
+  d'installation sans checksum). Le binaire `cosign` (v3.1.1) est installé de
+  la même façon : empreinte SHA-256 vérifiée avant installation.
 - **Lockfiles obligatoires.** `Cargo.lock` et `package-lock.json` sont
   versionnés. La CI utilise `cargo fetch --locked` puis `cargo build/test/clippy
   --locked` (aucune mise à jour implicite de dépendances) et `npm ci`
@@ -194,4 +218,13 @@ si un seul contrôle critique échoue** :
   digest) reste possible mais hors périmètre pour un projet mono-utilisateur.
 - Le toolchain Rust est téléchargé par `rustup` via la version épinglée ; on fait
   confiance à l'infrastructure de distribution officielle de Rust (signée).
+- La **provenance** atteste l'origine CI (dépôt, workflow, commit, run) mais
+  n'est pas un niveau SLSA Build L3 formellement certifié : le build n'est pas
+  isolé sur un constructeur dédié inviolable. Le prédicat reflète le contexte
+  GitHub Actions ; il faut faire confiance à ce contexte.
+- La vérification `cosign` (signature + provenance) est, en v0.7, une **étape
+  manuelle** documentee côté utilisateur. `install.sh` et `mnemo upgrade`
+  continuent d'exiger la vérification SHA-256 mais n'imposent pas encore la
+  vérification cosign ; son intégration optionnelle est prévue ultérieurement
+  (TODO v0.8), sans jamais affaiblir le contrôle SHA-256 existant.
 

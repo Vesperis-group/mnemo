@@ -180,6 +180,7 @@ jobs:
     permissions:
       contents: write # commit, tag, push, création de release
       pull-requests: read # lecture du contexte des PR (changelog)
+      id-token: write # OIDC keyless pour cosign (sign-blob / attest-blob)
     steps:
       - name: Checkout (historique complet)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -236,12 +237,41 @@ jobs:
           file target/x86_64-unknown-linux-musl/release/mnemo
           ldd target/x86_64-unknown-linux-musl/release/mnemo || true
 
+      # ----- Outillage d'intégrité des artefacts (SBOM + signatures) -----
+      # Versions EXACTES épinglées (pas de canal flottant), binaire cosign
+      # vérifié par empreinte SHA-256 avant installation (pas de `curl | bash`).
+      - name: Install cosign (pinned + checksum verified)
+        env:
+          COSIGN_VERSION: "3.1.1"
+          COSIGN_SHA256: "ae1ecd212663f3693ad9edf8b1a183900c9a52d3155ba6e354237f9a0f6463fc"
+        run: |
+          set -euo pipefail
+          url="https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-amd64"
+          curl -fsSL "${url}" -o /tmp/cosign
+          echo "${COSIGN_SHA256}  /tmp/cosign" | sha256sum -c -
+          sudo install -m 0755 /tmp/cosign /usr/local/bin/cosign
+          rm -f /tmp/cosign
+          cosign version
+
+      - name: Install cargo-cyclonedx (pinned, locked)
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Print artifact-integrity tool versions
+        run: |
+          cosign version
+          cargo cyclonedx --version
+
       # ----- Release versionnée (bump + tag + GitHub Release + artefacts) -----
       # Les binaires définitifs sont (re)construits APRÈS le bump de version par
       # le hook `after:bump` de release-it.json, afin que `mnemo version` reporte
       # la bonne version. Le packaging génère les `.tar.gz` + `.sha256` (glibc et
-      # musl), vérifie chaque checksum (`sha256sum -c`) puis les archives sont
-      # attachées via le glob d'assets de release-it.json.
+      # musl), vérifie chaque checksum (`sha256sum -c`), puis le SBOM CycloneDX,
+      # le fichier de checksums agrégé et les signatures + attestations de
+      # provenance cosign (keyless OIDC) sont produits ET vérifiés AVANT la
+      # création de la GitHub Release. Toute défaillance (build, packaging,
+      # checksum, SBOM, signature, provenance) interrompt release-it → aucune
+      # publication. Tous les artefacts sont attachés via le glob d'assets de
+      # release-it.json.
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"

@@ -216,6 +216,13 @@ install_from_release() {
         || die "Somme de contrôle invalide : archive corrompue ou altérée."
     ok "Intégrité vérifiée"
 
+    # Note (v0.7) : chaque release publie aussi une signature cosign
+    # (<asset>.sigstore.json) et une attestation de provenance SLSA
+    # (<asset>.provenance.sigstore.json). Leur vérification est, pour l'instant,
+    # une étape MANUELLE documentée dans le README (« Vérifier l'intégrité d'une
+    # release »). TODO v0.8 : vérification cosign optionnelle ici, sans jamais
+    # affaiblir le contrôle SHA-256 ci-dessus.
+
     info "Extraction"
     tar -xzf "${tmp}/${asset}" -C "${tmp}"
     local extracted="${tmp}/mnemo-${tag}-${target}"
