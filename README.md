@@ -217,6 +217,69 @@ make uninstall
 
 ---
 
+## Mise à jour et désinstallation (intégrées)
+
+Depuis la v0.5, mnemo gère lui-même son cycle de vie, sans dépendre des scripts
+shell.
+
+### `mnemo update` — y a-t-il du nouveau ?
+
+```bash
+mnemo update          # compare version installée et dernière release
+mnemo update --json   # sortie machine
+```
+
+N'installe **rien** : interroge l'API GitHub Releases (pré-releases ignorées) et
+affiche la version installée, la dernière version et si une mise à jour est
+disponible. Exemple JSON :
+
+```json
+{
+  "current_version": "v0.4.0",
+  "latest_version": "v0.5.0",
+  "update_available": true,
+  "asset_target": "x86_64-unknown-linux-musl"
+}
+```
+
+### `mnemo upgrade` — installer la dernière version
+
+```bash
+mnemo upgrade                 # dernière version stable (confirmation demandée)
+mnemo upgrade --yes           # sans question
+mnemo upgrade --dry-run       # montre ce qui serait fait, n'installe rien
+mnemo upgrade --version v0.5.0 # version précise
+mnemo upgrade --target aarch64-unknown-linux-musl
+```
+
+Déroulé : téléchargement de l'archive **et** de son `.sha256`, **vérification
+SHA-256 avant extraction**, contrôle que le nouveau binaire répond, sauvegarde
+automatique des données, puis remplacement **atomique** de `~/.local/bin/mnemo`.
+
+> 🔒 `upgrade` ne touche **jamais** à `history.db`, `config.toml` ni aux
+> sauvegardes. HTTPS et SHA-256 sont obligatoires ; aucun script distant n'est
+> exécuté. En cas d'échec, le binaire en place reste intact.
+
+### `mnemo uninstall` — retirer mnemo
+
+```bash
+mnemo uninstall              # retire binaire + bloc .bashrc, GARDE les données
+mnemo uninstall --dry-run    # aperçu sans rien modifier
+mnemo uninstall --purge      # supprime AUSSI config, base et sauvegardes
+mnemo uninstall --purge --yes
+```
+
+Par défaut, `uninstall` retire le binaire et le bloc d'intégration `.bashrc`
+(après sauvegarde) mais **conserve toutes les données**. Avec `--purge`, une
+sauvegarde de sécurité est créée hors du dossier de données, puis config, base
+et sauvegardes sont supprimées **après confirmation explicite** ; en mode non
+interactif, `--purge` exige `--yes`.
+
+> Toutes ces commandes destructrices disposent de `--dry-run` (aperçu) et
+> `--yes` (sans question).
+
+---
+
 ## Commandes disponibles
 
 | Commande | Description |
@@ -241,6 +304,9 @@ make uninstall
 | `mnemo prune --older-than <durée> [--project <nom>] [--branch <branche>] [--dry-run] [--yes]` | Nettoie les commandes anciennes (`30d`, `12w`, `6m`, `1y`). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
+| `mnemo update [--json]` | Vérifie si une nouvelle version est disponible (n'installe **rien**). |
+| `mnemo upgrade [--dry-run] [--yes] [--version <vX.Y.Z>] [--target <triplet>]` | Télécharge et installe la dernière version (vérif. SHA-256, remplacement atomique). |
+| `mnemo uninstall [--dry-run] [--yes] [--purge]` | Désinstalle mnemo. **Conserve les données** sauf `--purge`. |
 
 Le mode `--print` garde le comportement TUI **par défaut** (sans `--print`).
 
