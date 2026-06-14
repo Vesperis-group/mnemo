@@ -8,6 +8,7 @@ mod export;
 mod filter;
 mod gitctx;
 mod importer;
+mod lifecycle;
 mod list;
 mod migrations;
 mod prune;
@@ -121,6 +122,18 @@ fn run() -> Result<()> {
             version::run();
             Ok(())
         }
+        Command::Update { json } => lifecycle::update::run(json),
+        Command::Upgrade {
+            dry_run,
+            yes,
+            version,
+            target,
+        } => lifecycle::upgrade::run(dry_run, yes, version, target),
+        Command::Uninstall {
+            dry_run,
+            yes,
+            purge,
+        } => lifecycle::uninstall::run(dry_run, yes, purge),
     }
 }
 

@@ -201,6 +201,42 @@ pub enum Command {
 
     /// Affiche des informations détaillées de version et de build.
     Version,
+
+    /// Vérifie si une nouvelle version est disponible (sans rien installer).
+    Update {
+        /// Sortie au format JSON.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Télécharge et installe la dernière version stable (remplace le binaire).
+    Upgrade {
+        /// Montre ce qui serait fait sans rien télécharger ni remplacer.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme l'installation sans question interactive.
+        #[arg(long)]
+        yes: bool,
+        /// Force une version précise (ex : v0.5.0) au lieu de la dernière.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+        /// Force un triplet cible (ex : aarch64-unknown-linux-musl).
+        #[arg(long, value_name = "CIBLE")]
+        target: Option<String>,
+    },
+
+    /// Désinstalle mnemo : binaire + intégration shell. Conserve les données.
+    Uninstall {
+        /// Montre ce qui serait supprimé sans rien modifier.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme la désinstallation sans question interactive.
+        #[arg(long)]
+        yes: bool,
+        /// Supprime AUSSI la configuration, la base et les sauvegardes.
+        #[arg(long)]
+        purge: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
