@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.4.0](https://github.com/Vesperis-group/mnemo/compare/v0.3.1...v0.4.0) (2026-06-14)
+
+### Features
+
+* ajoute une TUI avancée ([f2417bc](https://github.com/Vesperis-group/mnemo/commit/f2417bca92e87cbeadc202b1fe8b424a33b5b568))
+
 ## [0.3.1](https://github.com/Vesperis-group/mnemo/compare/v0.3.0...v0.3.1) (2026-06-14)
 
 ### Bug Fixes
