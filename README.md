@@ -231,6 +231,7 @@ make uninstall
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
 | `mnemo stats [--project <nom>] [--branch <branche>] [--json]` | Statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets), filtrables et exportables en JSON. |
+| `mnemo config stats-ignore <add\|remove\|list> [<cmd>]` | Gère les commandes exclues du « Top commandes » dans `mnemo stats`. |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
 
@@ -301,6 +302,7 @@ Exemple `mnemo stats --json` :
   "git_projects": 1,
   "failed_commands": 0,
   "ignored_for_top_commands": 192,
+  "ignored_commands_config": ["create_dir"],
   "filters": { "project": "mnemo", "branch": null },
   "top_commands": [
     { "name": "cargo", "count": 12 },
@@ -314,6 +316,36 @@ Exemple `mnemo stats --json` :
   ]
 }
 ```
+
+#### Ignorer des commandes dans les statistiques
+
+Certaines commandes (helpers de scripts, alias internes…) polluent le « Top
+commandes » sans intérêt analytique. Vous pouvez les exclure **sans supprimer**
+de données : elles restent en base et dans le total, mais sont comptées comme
+« Entrées ignorées » au lieu d'apparaître dans le Top.
+
+La liste vit dans `~/.config/mnemo/config.toml`, section `[stats]` :
+
+```toml
+[stats]
+ignored_commands = ["create_dir", "export"]
+```
+
+La comparaison est **exacte et insensible à la casse**, appliquée au nom
+*normalisé* de la commande (`create_dir foo` → `create_dir`). Le filtre n'agit
+que sur le « Top commandes » ; les totaux globaux restent inchangés.
+
+Gérez la liste sans éditer le fichier à la main :
+
+```bash
+mnemo config stats-ignore add create_dir     # ajoute (idempotent, pas de doublon)
+mnemo config stats-ignore list               # affiche la liste
+mnemo config stats-ignore remove create_dir  # retire
+```
+
+`mnemo doctor` affiche également un rappel des commandes ignorées
+(`Commandes ignorées dans stats : create_dir, …`), et `mnemo stats --json`
+expose la liste via le champ `ignored_commands_config`.
 
 Le schéma SQLite est versionné (`PRAGMA user_version`). Les bases existantes sont
 migrées automatiquement et **sans perte** au premier usage ; `mnemo migrate`

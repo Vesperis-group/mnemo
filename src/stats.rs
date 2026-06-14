@@ -45,17 +45,19 @@ pub struct Stats {
 
 /// Point d'entrée de la commande.
 pub fn run(project: Option<String>, branch: Option<String>, json: bool) -> Result<()> {
+    let cfg = config::Config::load()?;
+    let ignored = &cfg.stats.ignored_commands;
     let conn = db::open(&config::db_path()?)?;
     let filter = SearchFilter {
         project: project.clone(),
         branch: branch.clone(),
     };
     let records = db::all_commands(&conn, &filter)?;
-    let stats = compute(&records);
+    let stats = compute(&records, ignored);
     let filters = Filters { project, branch };
 
     if json {
-        println!("{}", render_json(&stats, &filters));
+        println!("{}", render_json(&stats, &filters, ignored));
         return Ok(());
     }
 
@@ -70,7 +72,11 @@ pub fn run(project: Option<String>, branch: Option<String>, json: bool) -> Resul
 }
 
 /// Calcule les statistiques à partir des commandes (fonction pure).
-pub fn compute(records: &[CommandRecord]) -> Stats {
+///
+/// `ignored_commands` liste les noms (déjà normalisés en minuscules) à exclure
+/// du « Top commandes » ; ces commandes restent comptées dans le total et dans
+/// les autres sections, et sont ajoutées à `ignored_for_top_commands`.
+pub fn compute(records: &[CommandRecord], ignored_commands: &[String]) -> Stats {
     use std::collections::{HashMap, HashSet};
 
     let total = records.len();
@@ -84,6 +90,7 @@ pub fn compute(records: &[CommandRecord]) -> Stats {
 
     for r in records {
         match normalize_command_name(&r.command) {
+            Some(name) if is_ignored(&name, ignored_commands) => ignored += 1,
             Some(name) => *cmd_counts.entry(name).or_insert(0) += 1,
             None => ignored += 1,
         }
@@ -200,6 +207,13 @@ fn basename(token: &str) -> &str {
     token.rsplit('/').next().unwrap_or(token)
 }
 
+/// Vrai si un nom de commande normalisé figure dans la liste d'exclusion
+/// (comparaison exacte, insensible à la casse).
+fn is_ignored(name: &str, ignored_commands: &[String]) -> bool {
+    let lowered = name.to_lowercase();
+    ignored_commands.iter().any(|c| c == &lowered)
+}
+
 /// Nom de projet = dernier segment du chemin de la racine Git.
 fn project_name(root: &str) -> String {
     root.trim_end_matches('/')
@@ -281,18 +295,20 @@ struct JsonOutput {
     git_projects: usize,
     failed_commands: usize,
     ignored_for_top_commands: usize,
+    ignored_commands_config: Vec<String>,
     filters: Filters,
     top_commands: Vec<NamedCount>,
     top_directories: Vec<PathCount>,
     top_projects: Vec<NamedCount>,
 }
 
-fn render_json(stats: &Stats, filters: &Filters) -> String {
+fn render_json(stats: &Stats, filters: &Filters, ignored_commands: &[String]) -> String {
     let output = JsonOutput {
         total_commands: stats.total,
         git_projects: stats.git_projects,
         failed_commands: stats.failed,
         ignored_for_top_commands: stats.ignored_for_top_commands,
+        ignored_commands_config: ignored_commands.to_vec(),
         filters: filters.clone(),
         top_commands: stats
             .top_commands
@@ -438,7 +454,7 @@ mod tests {
 
     #[test]
     fn stats_sur_base_vide() {
-        let stats = compute(&[]);
+        let stats = compute(&[], &[]);
         assert_eq!(stats.total, 0);
         assert_eq!(stats.git_projects, 0);
         assert_eq!(stats.failed, 0);
@@ -467,7 +483,7 @@ mod tests {
                 Some(0),
             ),
         ];
-        let stats = compute(&records);
+        let stats = compute(&records, &[]);
 
         assert_eq!(stats.total, 5);
         // 3 entrées bruitées : "-", "| grep x", "# un commentaire".
@@ -509,7 +525,7 @@ mod tests {
                 Some(0),
             ),
         ];
-        let stats = compute(&records);
+        let stats = compute(&records, &[]);
 
         assert_eq!(stats.total, 5);
         assert_eq!(stats.git_projects, 2);
@@ -525,6 +541,46 @@ mod tests {
     }
 
     #[test]
+    fn stats_respecte_la_config_ignored_commands() {
+        let records = vec![
+            rec(
+                "create_dir foo",
+                Some("/p/mnemo"),
+                Some("/p/mnemo"),
+                Some(0),
+            ),
+            rec(
+                "create_dir bar",
+                Some("/p/mnemo"),
+                Some("/p/mnemo"),
+                Some(0),
+            ),
+            rec("cargo build", Some("/p/mnemo"), Some("/p/mnemo"), Some(0)),
+            rec("git status", Some("/p/mnemo"), Some("/p/mnemo"), Some(0)),
+        ];
+        let ignored = vec!["create_dir".to_string()];
+        let stats = compute(&records, &ignored);
+
+        // Le total reste complet ; seules les stats du Top commandes changent.
+        assert_eq!(stats.total, 4);
+        // Les 2 `create_dir` sont comptés comme ignorés, pas dans le Top.
+        assert_eq!(stats.ignored_for_top_commands, 2);
+        let names: Vec<&str> = stats.top_commands.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"cargo"));
+        assert!(names.contains(&"git"));
+        assert!(!names.contains(&"create_dir"));
+    }
+
+    #[test]
+    fn ignored_commands_insensible_a_la_casse() {
+        let records = vec![rec("Create_Dir foo", None, None, Some(0))];
+        // La liste est normalisée en minuscules par la config.
+        let stats = compute(&records, &["create_dir".to_string()]);
+        assert_eq!(stats.ignored_for_top_commands, 1);
+        assert!(stats.top_commands.is_empty());
+    }
+
+    #[test]
     fn json_est_bien_forme() {
         let records = vec![rec(
             "cargo build",
@@ -532,12 +588,12 @@ mod tests {
             Some("/home/u/proj/mnemo"),
             Some(0),
         )];
-        let stats = compute(&records);
+        let stats = compute(&records, &[]);
         let filters = Filters {
             project: Some("mnemo".to_string()),
             branch: None,
         };
-        let s = render_json(&stats, &filters);
+        let s = render_json(&stats, &filters, &["create_dir".to_string()]);
         let parsed: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(parsed["total_commands"], 1);
         assert_eq!(parsed["filters"]["project"], "mnemo");
@@ -545,6 +601,7 @@ mod tests {
         assert_eq!(parsed["top_commands"][0]["name"], "cargo");
         assert_eq!(parsed["top_commands"][0]["count"], 1);
         assert_eq!(parsed["top_directories"][0]["path"], "/home/u/proj/mnemo");
+        assert_eq!(parsed["ignored_commands_config"][0], "create_dir");
     }
 
     #[test]

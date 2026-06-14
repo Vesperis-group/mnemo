@@ -23,6 +23,18 @@ pub struct Config {
     pub ignore_prefixes: Vec<String>,
     /// Nombre maximal de commandes chargées dans la TUI.
     pub search_limit: usize,
+    /// Options propres à `mnemo stats`.
+    pub stats: StatsConfig,
+}
+
+/// Configuration de la commande `mnemo stats`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StatsConfig {
+    /// Noms de commandes (normalisés) à exclure du « Top commandes ». Les
+    /// commandes concernées restent en base ; elles sont seulement comptées
+    /// dans « Entrées ignorées ».
+    pub ignored_commands: Vec<String>,
 }
 
 impl Default for Config {
@@ -31,6 +43,7 @@ impl Default for Config {
             sensitive_keywords: DEFAULT_SENSITIVE.iter().map(|s| s.to_string()).collect(),
             ignore_prefixes: vec!["mnemo".to_string()],
             search_limit: 5000,
+            stats: StatsConfig::default(),
         }
     }
 }
@@ -61,6 +74,34 @@ impl Config {
         std::fs::write(path, raw)
             .with_context(|| format!("écriture de la config {}", path.display()))?;
         Ok(())
+    }
+
+    /// Normalise un nom de commande pour la liste d'exclusion des stats :
+    /// trim + minuscules. Stratégie simple et documentée (comparaison exacte,
+    /// insensible à la casse).
+    pub fn normalize_ignored(name: &str) -> String {
+        name.trim().to_lowercase()
+    }
+
+    /// Ajoute une commande à `stats.ignored_commands` si absente.
+    /// Retourne `true` si la liste a changé, `false` si déjà présente.
+    pub fn add_ignored_command(&mut self, name: &str) -> bool {
+        let normalized = Self::normalize_ignored(name);
+        if self.stats.ignored_commands.contains(&normalized) {
+            return false;
+        }
+        self.stats.ignored_commands.push(normalized);
+        self.stats.ignored_commands.sort();
+        true
+    }
+
+    /// Retire une commande de `stats.ignored_commands` si présente.
+    /// Retourne `true` si la liste a changé, `false` si absente.
+    pub fn remove_ignored_command(&mut self, name: &str) -> bool {
+        let normalized = Self::normalize_ignored(name);
+        let before = self.stats.ignored_commands.len();
+        self.stats.ignored_commands.retain(|c| c != &normalized);
+        self.stats.ignored_commands.len() != before
     }
 }
 

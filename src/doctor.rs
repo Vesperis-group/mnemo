@@ -238,6 +238,24 @@ fn check_config(report: &mut Report) -> Result<()> {
             ),
         );
     }
+
+    let cfg = config::Config::load()?;
+    if cfg.stats.ignored_commands.is_empty() {
+        report.push(
+            "config.stats_ignore",
+            Status::Info,
+            "Aucune commande ignorée dans stats".to_string(),
+        );
+    } else {
+        report.push(
+            "config.stats_ignore",
+            Status::Info,
+            format!(
+                "Commandes ignorées dans stats : {}",
+                cfg.stats.ignored_commands.join(", ")
+            ),
+        );
+    }
     Ok(())
 }
 

@@ -88,6 +88,37 @@ pub enum Command {
         json: bool,
     },
 
+    /// Gère la configuration locale de mnemo.
+    Config {
+        #[command(subcommand)]
+        action: ConfigCommand,
+    },
+
     /// Affiche des informations détaillées de version et de build.
     Version,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommand {
+    /// Gère la liste des commandes ignorées dans `mnemo stats`.
+    StatsIgnore {
+        #[command(subcommand)]
+        action: StatsIgnoreCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum StatsIgnoreCommand {
+    /// Ajoute une commande à la liste ignorée du Top commandes.
+    Add {
+        /// Nom de commande (ex: `create_dir`).
+        name: String,
+    },
+    /// Retire une commande de la liste ignorée.
+    Remove {
+        /// Nom de commande (ex: `create_dir`).
+        name: String,
+    },
+    /// Affiche les commandes actuellement ignorées.
+    List,
 }
