@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 use serde::Serialize;
+use std::io::Write;
 
 use crate::config;
 use crate::db::{self, CommandRecord, SearchFilter};
@@ -56,18 +57,24 @@ pub fn run(project: Option<String>, branch: Option<String>, json: bool) -> Resul
     let stats = compute(&records, ignored);
     let filters = Filters { project, branch };
 
+    // Sortie via un stdout verrouillé : un `BrokenPipe` (sortie pipée vers
+    // `head`, `less`…) remonte comme une erreur propre au lieu de faire
+    // paniquer `println!`.
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
     if json {
-        println!("{}", render_json(&stats, &filters, ignored));
+        writeln!(out, "{}", render_json(&stats, &filters, ignored))?;
         return Ok(());
     }
 
     // En mode texte, un filtre sans résultat mérite un message explicite.
     if records.is_empty() && !filters.is_empty() {
-        println!("Aucune commande trouvée pour ces filtres.");
+        writeln!(out, "Aucune commande trouvée pour ces filtres.")?;
         return Ok(());
     }
 
-    render_text(&stats, &filters);
+    render_text(&mut out, &stats, &filters)?;
     Ok(())
 }
 
@@ -236,41 +243,53 @@ fn top_n(counts: std::collections::HashMap<String, usize>, n: usize) -> Vec<(Str
 // Rendu texte.
 // ---------------------------------------------------------------------------
 
-fn render_text(stats: &Stats, filters: &Filters) {
-    println!("mnemo stats — statistiques d'usage");
-    println!("----------------------------------");
+fn render_text<W: Write>(out: &mut W, stats: &Stats, filters: &Filters) -> std::io::Result<()> {
+    writeln!(out, "mnemo stats — statistiques d'usage")?;
+    writeln!(out, "----------------------------------")?;
     if !filters.is_empty() {
-        println!(
+        writeln!(
+            out,
             "Filtres                : projet={}, branche={}",
             filters.project.as_deref().unwrap_or("-"),
             filters.branch.as_deref().unwrap_or("-"),
-        );
+        )?;
     }
-    println!("Commandes enregistrées : {}", stats.total);
-    println!("Projets Git détectés   : {}", stats.git_projects);
-    println!("Commandes en échec     : {} (exit_code ≠ 0)", stats.failed);
+    writeln!(out, "Commandes enregistrées : {}", stats.total)?;
+    writeln!(out, "Projets Git détectés   : {}", stats.git_projects)?;
+    writeln!(
+        out,
+        "Commandes en échec     : {} (exit_code ≠ 0)",
+        stats.failed
+    )?;
 
-    render_section("Top commandes", &stats.top_commands);
+    render_section(out, "Top commandes", &stats.top_commands)?;
     if stats.ignored_for_top_commands > 0 {
-        println!(
+        writeln!(
+            out,
             "  Entrées ignorées dans le Top commandes : {}",
             stats.ignored_for_top_commands
-        );
+        )?;
     }
-    render_section("Top dossiers", &stats.top_dirs);
-    render_section("Top projets Git", &stats.top_projects);
+    render_section(out, "Top dossiers", &stats.top_dirs)?;
+    render_section(out, "Top projets Git", &stats.top_projects)?;
+    Ok(())
 }
 
-fn render_section(title: &str, entries: &[(String, usize)]) {
-    println!();
-    println!("{title} :");
+fn render_section<W: Write>(
+    out: &mut W,
+    title: &str,
+    entries: &[(String, usize)],
+) -> std::io::Result<()> {
+    writeln!(out)?;
+    writeln!(out, "{title} :")?;
     if entries.is_empty() {
-        println!("  (aucune donnée)");
-        return;
+        writeln!(out, "  (aucune donnée)")?;
+        return Ok(());
     }
     for (label, count) in entries {
-        println!("  {count:>5}  {label}");
+        writeln!(out, "  {count:>5}  {label}")?;
     }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

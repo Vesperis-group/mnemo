@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use serde::Serialize;
+use std::io::Write;
 use std::path::Path;
 
 use crate::config;
@@ -35,6 +36,12 @@ pub fn run(
     let filter = SearchFilter { project, branch };
     let records = db::fetch_filtered(&conn, &filter, limit)?;
 
+    // Écriture via un stdout verrouillé : un `BrokenPipe` (sortie pipée vers
+    // `head`, `less`…) remonte alors comme une erreur propre plutôt que de
+    // faire paniquer `println!`.
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
     if json {
         let rows: Vec<JsonRow> = records
             .iter()
@@ -47,17 +54,17 @@ pub fn run(
                 command: &r.command,
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&rows)?);
+        writeln!(out, "{}", serde_json::to_string_pretty(&rows)?)?;
         return Ok(());
     }
 
     if records.is_empty() {
-        println!("Aucune commande à afficher.");
+        writeln!(out, "Aucune commande à afficher.")?;
         return Ok(());
     }
 
     for r in &records {
-        println!("{}", short_line(r));
+        writeln!(out, "{}", short_line(r))?;
     }
     Ok(())
 }

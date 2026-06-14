@@ -21,7 +21,37 @@ use clap::Parser;
 use std::path::PathBuf;
 
 use cli::{Cli, Command};
-fn main() -> Result<()> {
+
+fn main() {
+    if let Err(err) = run() {
+        // Une sortie pipée vers `head`, `less`, etc. ferme stdout en avance :
+        // mnemo reçoit alors un `BrokenPipe`. C'est le comportement Unix normal,
+        // pas une erreur applicative : on quitte silencieusement avec le code 0.
+        if err.chain().any(is_broken_pipe_error) {
+            std::process::exit(0);
+        }
+        // Toute autre erreur reste visible et échoue avec un code non nul.
+        eprintln!("Error: {err:?}");
+        std::process::exit(1);
+    }
+}
+
+/// Détecte une erreur `BrokenPipe`, y compris lorsqu'elle est enveloppée dans
+/// une chaîne de causes (`source()`).
+fn is_broken_pipe_error(err: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(err);
+    while let Some(e) = current {
+        if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
+            if io_err.kind() == std::io::ErrorKind::BrokenPipe {
+                return true;
+            }
+        }
+        current = e.source();
+    }
+    false
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Init => cmd_init(),
@@ -284,4 +314,53 @@ fn hostname() -> Option<String> {
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_broken_pipe_error;
+    use std::io::{Error, ErrorKind};
+
+    #[test]
+    fn detecte_un_broken_pipe_direct() {
+        let err = Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        assert!(is_broken_pipe_error(&err));
+    }
+
+    #[test]
+    fn ignore_les_autres_erreurs_io() {
+        let err = Error::new(ErrorKind::NotFound, "absent");
+        assert!(!is_broken_pipe_error(&err));
+    }
+
+    #[test]
+    fn detecte_un_broken_pipe_enveloppe_via_source() {
+        // Erreur custom dont la source est un BrokenPipe.
+        #[derive(Debug)]
+        struct Wrapper(Error);
+        impl std::fmt::Display for Wrapper {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "wrapper")
+            }
+        }
+        impl std::error::Error for Wrapper {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+
+        let wrapped = Wrapper(Error::new(ErrorKind::BrokenPipe, "broken pipe"));
+        assert!(is_broken_pipe_error(&wrapped));
+
+        let wrapped_other = Wrapper(Error::new(ErrorKind::PermissionDenied, "refusé"));
+        assert!(!is_broken_pipe_error(&wrapped_other));
+    }
+
+    #[test]
+    fn anyhow_chain_contient_le_broken_pipe() {
+        // Reproduit ce que voit `main()` : une anyhow::Error avec contexte.
+        let io = Error::new(ErrorKind::BrokenPipe, "broken pipe");
+        let err = anyhow::Error::new(io).context("écriture sur stdout");
+        assert!(err.chain().any(is_broken_pipe_error));
+    }
 }
