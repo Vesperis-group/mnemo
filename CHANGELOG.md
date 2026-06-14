@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.6.0](https://github.com/Vesperis-group/mnemo/compare/v0.5.1...v0.6.0) (2026-06-14)
+
+### Features
+
+* ajoute le socle audit securite DevSecOps ([0ced116](https://github.com/Vesperis-group/mnemo/commit/0ced1160538ce66a84b7ea9fad21ffcdb11ae7db))
+
 ## [0.5.1](https://github.com/Vesperis-group/mnemo/compare/v0.5.0...v0.5.1) (2026-06-14)
 
 ### Bug Fixes

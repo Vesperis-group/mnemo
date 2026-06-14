@@ -1,6 +1,6 @@
 [package]
 name = "mnemo"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 description = "mnemo - navigation et recherche dans l'historique Bash (CLI/TUI maison)"
 license = "MIT"
