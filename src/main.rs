@@ -184,9 +184,12 @@ fn cmd_init() -> Result<()> {
         config::Config::default().save(&cfg_path)?;
         println!("Configuration créée : {}", cfg_path.display());
     }
+    // Idempotent : resserre les permissions même si la config préexistait.
+    config::harden_file(&cfg_path);
 
     let db_path = config::db_path()?;
     db::open(&db_path)?;
+    config::harden_file(&db_path);
     println!("Base de données : {}", db_path.display());
 
     println!();

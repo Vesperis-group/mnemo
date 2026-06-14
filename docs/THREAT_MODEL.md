@@ -115,6 +115,20 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   sortie non nul, aucun effet de bord destructif. `doctor` reste hors-ligne.
 - **Risque résiduel** : aucun (mode dégradé propre).
 
+### M10 - Exposition locale de l'historique via permissions trop ouvertes
+- **Menace** : sur une machine multi-utilisateurs, un autre compte local lit la
+  config, la base d'historique shell ou les archives de sauvegarde parce que ces
+  fichiers ont été créés avec des permissions de groupe/autres (`644`, `664`…).
+- **Mitigations** : sous Unix, config, `history.db` et archives `*.tar.gz` sont
+  créées en `600` et les dossiers gérés en `700` (durcissement centralisé
+  appliqué à la création et à `init`). `mnemo doctor` signale toute permission
+  trop ouverte et `mnemo doctor --fix` la resserre à `600` sans toucher au
+  contenu.
+- **Risque résiduel** : un fichier déplacé/copié manuellement hors des chemins
+  gérés, ou un `umask` exotique appliqué après coup, échappe au durcissement
+  tant que `doctor --fix` n'est pas relancé ; les plateformes non-Unix reposent
+  sur les ACL du système de fichiers.
+
 ## 4. Surface réseau
 
 - **Sortant uniquement**, HTTPS, vers `api.github.com` et `github.com`

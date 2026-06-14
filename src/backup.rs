@@ -91,6 +91,7 @@ pub fn create_backup(dest_dir: Option<&Path>) -> Result<BackupInfo> {
     };
     fs::create_dir_all(&dest)
         .with_context(|| format!("création du dossier de sauvegarde {}", dest.display()))?;
+    config::harden_dir(&dest);
 
     let (secs, formatted) = timestamp_parts();
 
@@ -117,6 +118,8 @@ pub fn create_backup(dest_dir: Option<&Path>) -> Result<BackupInfo> {
     let archive_path = dest.join(archive_filename(&formatted));
     let archive_path = unique_path(archive_path);
     write_archive(&archive_path, &db_path, &config_path, &metadata, secs)?;
+    // L'archive contient l'historique et la configuration : permissions privées.
+    config::harden_file(&archive_path);
     Ok(BackupInfo {
         path: archive_path,
         metadata,

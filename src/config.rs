@@ -114,10 +114,13 @@ impl Config {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("création du dossier {}", parent.display()))?;
+            harden_dir(parent);
         }
         let raw = toml::to_string_pretty(self)?;
         std::fs::write(path, raw)
             .with_context(|| format!("écriture de la config {}", path.display()))?;
+        // La configuration contient des réglages locaux : permissions privées.
+        harden_file(path);
         Ok(())
     }
 
@@ -244,6 +247,7 @@ pub fn backup_existing(path: &Path) -> Result<Option<PathBuf>> {
     ));
     std::fs::copy(path, &backup)
         .with_context(|| format!("sauvegarde de {} vers {}", path.display(), backup.display()))?;
+    harden_file(&backup);
     Ok(Some(backup))
 }
 
@@ -263,4 +267,57 @@ pub fn data_dir() -> Result<PathBuf> {
 
 pub fn db_path() -> Result<PathBuf> {
     Ok(data_dir()?.join("history.db"))
+}
+
+/// Mode Unix privé attendu pour les fichiers sensibles (config, base, archives).
+pub const SECRET_FILE_MODE: u32 = 0o600;
+/// Mode Unix privé attendu pour les dossiers gérés par mnemo.
+pub const SECRET_DIR_MODE: u32 = 0o700;
+
+/// Resserre les permissions d'un fichier sensible à `600` (lecture/écriture
+/// propriétaire uniquement).
+///
+/// N'altère jamais le contenu du fichier. Sur les plateformes non-Unix, ne fait
+/// rien et ne renvoie pas d'erreur. L'opération est idempotente : la permission
+/// n'est réécrite que si elle diffère déjà de `600`.
+pub fn harden_file(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(path) {
+            let mut perms = meta.permissions();
+            if perms.mode() & 0o777 != SECRET_FILE_MODE {
+                perms.set_mode(SECRET_FILE_MODE);
+                let _ = std::fs::set_permissions(path, perms);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
+/// Resserre les permissions d'un dossier géré par mnemo à `700`.
+///
+/// Comme [`harden_file`], l'opération est best-effort, idempotente et sans effet
+/// sur les plateformes non-Unix.
+pub fn harden_dir(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.is_dir() {
+                let mut perms = meta.permissions();
+                if perms.mode() & 0o777 != SECRET_DIR_MODE {
+                    perms.set_mode(SECRET_DIR_MODE);
+                    let _ = std::fs::set_permissions(path, perms);
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
 }

@@ -113,6 +113,27 @@ fn backup_cree_une_archive_valide() {
     assert!(s.contains("[dry-run]"), "{s}");
 }
 
+#[cfg(unix)]
+#[test]
+fn backup_cree_une_archive_en_600() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    setup(home, &["a", "b"]);
+
+    assert!(run(home, &["backup"]).status.success());
+
+    let archive = std::fs::read_dir(backups_dir(home))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let mode = std::fs::metadata(&archive).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "archive {} en {:o}", archive.display(), mode);
+}
+
 #[test]
 fn backup_json_valide() {
     let dir = tempfile::tempdir().unwrap();
