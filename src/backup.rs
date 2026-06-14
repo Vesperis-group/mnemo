@@ -126,6 +126,34 @@ pub fn create_backup(dest_dir: Option<&Path>) -> Result<BackupInfo> {
     })
 }
 
+/// Dossier standard des sauvegardes (`~/.local/share/mnemo/backups`).
+pub fn backups_dir() -> Result<PathBuf> {
+    Ok(config::data_dir()?.join("backups"))
+}
+
+/// Liste les archives de sauvegarde (`*.tar.gz`) présentes dans `dir`.
+///
+/// Renvoie un vecteur vide si le dossier est absent ou illisible (jamais
+/// d'erreur : utilisé par des contrôles best-effort).
+pub fn list_archives(dir: &Path) -> Vec<PathBuf> {
+    let mut archives = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_archive = path.is_file()
+                && path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.ends_with(".tar.gz"))
+                    .unwrap_or(false);
+            if is_archive {
+                archives.push(path);
+            }
+        }
+    }
+    archives
+}
+
 /// Écrit l'archive `.tar.gz` sur disque.
 fn write_archive(
     archive_path: &Path,

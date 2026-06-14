@@ -234,3 +234,29 @@ adossé à des tests automatisés (référencés entre parenthèses).
     (`tests/doctor.rs::{doctor_signale_config_trop_ouverte,
     doctor_signale_db_trop_ouverte, doctor_fix_resserre_config_a_600,
     doctor_fix_resserre_db_a_600}`)
+
+## Permissions des sauvegardes (v0.9.2)
+
+32. **Les sauvegardes existantes peuvent être remises en conformité.**
+    `mnemo doctor` inspecte les archives `~/.local/share/mnemo/backups/*.tar.gz`
+    et signale, de façon **agrégée et non bruyante**, celles qui sont trop
+    ouvertes (`Backups trop ouverts : N fichier(s), attendu 600`) ; il n'affiche
+    rien si aucune archive n'existe et un résumé `OK` discret si toutes sont en
+    `600`. `mnemo doctor --fix` resserre à `600` toutes les archives trop
+    ouvertes (y compris les sauvegardes créées avant v0.9.1) avec un unique
+    résumé `[FIX] Permissions corrigées : N backup(s) → 600`, sans jamais lire,
+    modifier ou supprimer le contenu des archives, et sans échouer si le dossier
+    `backups` est absent.
+    (`tests/doctor.rs::{doctor_signale_backups_trop_ouverts,
+    doctor_aucun_warning_backups_si_dossier_absent,
+    doctor_aucun_warning_backups_si_tous_en_600,
+    doctor_fix_corrige_les_backups_existants,
+    doctor_fix_compte_les_corrections_backups_dans_le_resume}`)
+
+33. **La correction des permissions est rapportée explicitement.**
+    `mnemo doctor --fix` rend visible chaque correction : la base est resserrée
+    par `db::open` mais la correction est rapportée explicitement
+    (`[FIX] Permissions corrigées : …/history.db → 600`) au lieu d'être
+    silencieuse, et chaque correction (config, base, sauvegardes) est comptée
+    dans le résumé `Corrections appliquées : X` et le total `FIX`.
+    (`tests/doctor.rs::doctor_fix_reporte_explicitement_la_db`)
