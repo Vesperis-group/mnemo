@@ -60,6 +60,7 @@ pub fn import_from_str(conn: &Connection, content: &str, config: &Config) -> Res
             hostname: None,
             exit_code: None,
             created_at: created_at.clone(),
+            ..Default::default()
         };
 
         if db::insert_command(conn, &cmd)? {

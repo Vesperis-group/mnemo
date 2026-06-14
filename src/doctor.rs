@@ -10,7 +10,7 @@ use anyhow::Result;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-use crate::{config, db, shell};
+use crate::{config, db, migrations, shell};
 
 /// Niveau de chaque contrôle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -278,6 +278,7 @@ fn check_database(report: &mut Report) -> Result<()> {
     match db::table_exists(&conn, "commands") {
         Ok(true) => {
             report.push("db.table", Status::Ok, "Table `commands` présente");
+            check_schema_version(report, &conn);
             match db::count(&conn) {
                 Ok(n) => report.push(
                     "db.count",
@@ -304,6 +305,48 @@ fn check_database(report: &mut Report) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Vérifie la version du schéma SQLite (`PRAGMA user_version`) sans jamais
+/// migrer : `doctor` reste en lecture seule. Signale si une migration est
+/// nécessaire, ou si la base provient d'une version plus récente de mnemo.
+fn check_schema_version(report: &mut Report, conn: &rusqlite::Connection) {
+    let expected = migrations::SCHEMA_VERSION;
+    match migrations::schema_version(conn) {
+        Ok(current) => {
+            report.push(
+                "db.schema",
+                Status::Info,
+                format!("Schéma SQLite : v{current} (attendu v{expected})"),
+            );
+            if current < expected {
+                report.push(
+                    "db.schema.migration",
+                    Status::Warn,
+                    "Migration nécessaire : lancez `mnemo migrate` (ou toute commande mnemo l'applique automatiquement)",
+                );
+            } else if current > expected {
+                report.push(
+                    "db.schema.migration",
+                    Status::Error,
+                    format!(
+                        "Base créée par une version plus récente (schéma v{current} > v{expected}) : mettez mnemo à jour"
+                    ),
+                );
+            } else {
+                report.push(
+                    "db.schema.migration",
+                    Status::Ok,
+                    "Schéma à jour, aucune migration nécessaire",
+                );
+            }
+        }
+        Err(e) => report.push(
+            "db.schema",
+            Status::Error,
+            format!("Lecture de la version de schéma impossible : {e}"),
+        ),
+    }
 }
 
 fn check_bashrc(report: &mut Report) {
