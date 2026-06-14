@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.5.0](https://github.com/Vesperis-group/mnemo/compare/v0.4.0...v0.5.0) (2026-06-14)
+
+### Features
+
+* ajoute update upgrade et uninstall ([59b22bb](https://github.com/Vesperis-group/mnemo/commit/59b22bb9ef1a305e14f374354e299ab80e3dc01a))
+
 ## [0.4.0](https://github.com/Vesperis-group/mnemo/compare/v0.3.1...v0.4.0) (2026-06-14)
 
 ### Features
