@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.9.1](https://github.com/Vesperis-group/mnemo/compare/v0.9.0...v0.9.1) (2026-06-14)
+
+### Bug Fixes
+
+* durcit les permissions locales de mnemo ([8645fc8](https://github.com/Vesperis-group/mnemo/commit/8645fc84953ffd4a852541d61d7b960f2177f4e9))
+
 ## [0.9.0](https://github.com/Vesperis-group/mnemo/compare/v0.8.0...v0.9.0) (2026-06-14)
 
 ### Features
