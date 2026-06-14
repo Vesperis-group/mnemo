@@ -46,6 +46,17 @@ pub fn run_interactive(
     let mut backend = DbBackend::open(limit)?;
     let mut app = TuiApp::new(records, filters, initial_query);
 
+    // Contexte Git du dossier de lancement pour les filtres « projet/branche
+    // courant(e) » (`p` / `b`). Détection best-effort : aucune erreur bloquante.
+    if let Ok(cwd) = std::env::current_dir() {
+        let ctx = crate::gitctx::detect(&cwd);
+        let project = ctx
+            .root
+            .as_deref()
+            .map(|r| app::last_segment(r).to_string());
+        app.set_current_context(project, ctx.branch);
+    }
+
     let mut terminal = setup_terminal()?;
     let result = event_loop(&mut terminal, &mut app, &mut backend);
     restore_terminal(&mut terminal)?;
@@ -123,6 +134,21 @@ pub fn search_print(records: &[CommandRecord], query: &str, limit: usize) -> Vec
         .into_iter()
         .take(limit)
         .map(|i| records[i].command.clone())
+        .collect()
+}
+
+/// Variante de [`search_print`] conservant les enregistrements complets, pour la
+/// sortie JSON stable de `mnemo search --print --json`.
+pub fn search_records<'a>(
+    records: &'a [CommandRecord],
+    query: &str,
+    limit: usize,
+) -> Vec<&'a CommandRecord> {
+    let mut matcher = Matcher::new(NucleoConfig::DEFAULT);
+    fuzzy_filter(records, query, &mut matcher)
+        .into_iter()
+        .take(limit)
+        .map(|i| &records[i])
         .collect()
 }
 

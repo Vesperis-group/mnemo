@@ -11,7 +11,9 @@ mod gitctx;
 mod importer;
 mod lifecycle;
 mod list;
+mod maintenance;
 mod migrations;
+mod project;
 mod prune;
 mod shell;
 mod stats;
@@ -70,7 +72,27 @@ fn run() -> Result<()> {
             limit,
             project,
             branch,
-        } => cmd_search(query.or(query_opt), print, limit, project, branch),
+            exit_code,
+            failed,
+            since,
+            before,
+            cwd,
+            shell,
+            json,
+        } => cmd_search(cli::SearchArgs {
+            query: query.or(query_opt),
+            print,
+            limit,
+            project,
+            branch,
+            exit_code,
+            failed,
+            since,
+            before,
+            cwd,
+            shell,
+            json,
+        }),
         Command::Tui {
             query,
             project,
@@ -86,8 +108,9 @@ fn run() -> Result<()> {
         Command::Stats {
             project,
             branch,
+            since,
             json,
-        } => stats::run(project, branch, json),
+        } => stats::run(project, branch, since, json),
         Command::Doctor { fix, json } => {
             let code = doctor::run(fix, json)?;
             std::process::exit(code);
@@ -104,7 +127,8 @@ fn run() -> Result<()> {
             project,
             branch,
             output,
-        } => export::run(format, project, branch, output),
+            gzip,
+        } => export::run(format, project, branch, output, gzip),
         Command::List {
             limit,
             project,
@@ -141,6 +165,14 @@ fn run() -> Result<()> {
             yes,
             purge,
         } => lifecycle::uninstall::run(dry_run, yes, purge),
+        Command::Project { action } => match action {
+            cli::ProjectCommand::Current => project::run_current(),
+            cli::ProjectCommand::List => project::run_list(),
+        },
+        Command::Maintenance { action } => match action {
+            cli::MaintenanceCommand::Status => maintenance::run_status(),
+            cli::MaintenanceCommand::Run { dry_run, yes } => maintenance::run(dry_run, yes),
+        },
     }
 }
 
@@ -235,31 +267,63 @@ fn cmd_add(cmd: String, cwd: Option<String>, exit_code: i64) -> Result<()> {
     Ok(())
 }
 
-fn cmd_search(
-    query: Option<String>,
-    print: bool,
-    limit: usize,
-    project: Option<String>,
-    branch: Option<String>,
-) -> Result<()> {
+fn cmd_search(args: cli::SearchArgs) -> Result<()> {
     let cfg = config::Config::load()?;
     let conn = db::open(&config::db_path()?)?;
-    let filter = db::SearchFilter { project, branch };
-    let records = db::fetch_filtered(&conn, &filter, cfg.search_limit)?;
+
+    // `--project current` se résout vers le nom du projet du dossier courant.
+    let project = resolve_project_filter(args.project);
+
+    // Bornes temporelles : une spec invalide est ignorée proprement (pas de
+    // panique), avec un simple avertissement sur stderr.
+    let since = resolve_time_bound(args.since.as_deref(), db::resolve_since, "--since");
+    let before = resolve_time_bound(args.before.as_deref(), db::resolve_before, "--before");
+
+    let filter = db::QueryFilter {
+        project,
+        branch: args.branch,
+        cwd: args.cwd,
+        shell: args.shell,
+        exit_code: args.exit_code,
+        failed: args.failed,
+        since,
+        before,
+    };
+    let no_filter = matches!(
+        &filter,
+        db::QueryFilter {
+            project: None,
+            branch: None,
+            cwd: None,
+            shell: None,
+            exit_code: None,
+            failed: false,
+            since: None,
+            before: None,
+        }
+    );
+
+    let records = db::fetch_query(&conn, &filter, Some(cfg.search_limit))?;
     if records.is_empty() {
-        if filter.is_empty() {
+        if no_filter {
             eprintln!("Aucune commande enregistrée. Lancez `mnemo import` d'abord.");
         } else {
-            eprintln!("Aucune commande ne correspond à ce filtre Git.");
+            eprintln!("Aucune commande ne correspond à ces filtres.");
         }
         return Ok(());
     }
 
+    let query = args.query.unwrap_or_default();
+
     // Mode non interactif : affiche les résultats sur stdout (scripts/CI).
-    if print {
-        let query = query.unwrap_or_default();
-        for cmd in tui::search_print(&records, &query, limit) {
-            println!("{cmd}");
+    if args.print {
+        if args.json {
+            let matching = tui::search_records(&records, &query, args.limit);
+            println!("{}", export::records_to_json(&matching)?);
+        } else {
+            for cmd in tui::search_print(&records, &query, args.limit) {
+                println!("{cmd}");
+            }
         }
         return Ok(());
     }
@@ -268,14 +332,49 @@ fn cmd_search(
     let seed = tui::app::TuiFilters {
         project: filter.project.clone(),
         branch: filter.branch.clone(),
-        ..Default::default()
+        cwd: filter.cwd.clone(),
+        status: if filter.failed {
+            tui::app::StatusFilter::Failure
+        } else {
+            tui::app::StatusFilter::All
+        },
     };
-    if let Some(selected) =
-        tui::run_interactive(records, seed, query.unwrap_or_default(), cfg.search_limit)?
-    {
+    if let Some(selected) = tui::run_interactive(records, seed, query, cfg.search_limit)? {
         println!("{selected}");
     }
     Ok(())
+}
+
+/// Résout `--project current` vers le nom du projet du dossier courant ; laisse
+/// toute autre valeur inchangée.
+fn resolve_project_filter(project: Option<String>) -> Option<String> {
+    match project {
+        Some(p) if p.eq_ignore_ascii_case("current") => {
+            let resolved = project::current_name();
+            if resolved.is_none() {
+                eprintln!("Projet courant indéterminé : filtre projet ignoré.");
+            }
+            resolved
+        }
+        other => other,
+    }
+}
+
+/// Applique un résolveur de borne temporelle, en avertissant si la spec est
+/// invalide (la borne est alors ignorée plutôt que de provoquer une panique).
+fn resolve_time_bound(
+    spec: Option<&str>,
+    resolver: fn(&str) -> Option<String>,
+    flag: &str,
+) -> Option<String> {
+    let spec = spec?;
+    match resolver(spec) {
+        Some(bound) => Some(bound),
+        None => {
+            eprintln!("Valeur {flag} invalide ({spec:?}) : filtre temporel ignoré.");
+            None
+        }
+    }
 }
 
 /// Sous-commande `mnemo tui` : interface interactive principale.
@@ -337,7 +436,125 @@ fn cmd_migrate() -> Result<()> {
 /// Sous-commande `mnemo config …` : gestion de la configuration locale.
 fn cmd_config(action: cli::ConfigCommand) -> Result<()> {
     match action {
+        cli::ConfigCommand::Show => cmd_config_show(),
+        cli::ConfigCommand::Path => cmd_config_path(),
+        cli::ConfigCommand::Edit => cmd_config_edit(),
+        cli::ConfigCommand::Validate => cmd_config_validate(),
         cli::ConfigCommand::StatsIgnore { action } => cmd_config_stats_ignore(action),
+    }
+}
+
+/// `mnemo config show` : affiche la configuration effective (défauts inclus).
+fn cmd_config_show() -> Result<()> {
+    let cfg = config::Config::load()?;
+    print!("{}", toml::to_string_pretty(&cfg)?);
+    Ok(())
+}
+
+/// `mnemo config path` : affiche le chemin du fichier de configuration.
+fn cmd_config_path() -> Result<()> {
+    println!("{}", config::config_path()?.display());
+    Ok(())
+}
+
+/// `mnemo config edit` : ouvre la configuration dans l'éditeur préféré.
+///
+/// Crée une configuration par défaut si elle est absente, puis en fait toujours
+/// une sauvegarde avant ouverture (l'éditeur peut l'écraser).
+fn cmd_config_edit() -> Result<()> {
+    let path = config::config_path()?;
+    if !path.exists() {
+        config::Config::default().save(&path)?;
+        println!("Configuration créée : {}", path.display());
+    }
+    if let Some(backup) = config::backup_existing(&path)? {
+        println!("Sauvegarde : {}", backup.display());
+    }
+
+    let editor = resolve_editor();
+    let status = std::process::Command::new(&editor)
+        .arg(&path)
+        .status()
+        .with_context(|| format!("lancement de l'éditeur {editor:?}"))?;
+    if !status.success() {
+        eprintln!("L'éditeur {editor:?} s'est terminé sans succès.");
+        return Ok(());
+    }
+
+    // Revalide après édition pour signaler une éventuelle erreur de saisie.
+    match config::load_and_validate(&path) {
+        Ok((_, issues)) if issues.is_empty() => println!("Configuration valide."),
+        Ok((_, issues)) => print_config_issues(&issues),
+        Err(err) => eprintln!("Configuration invalide : {err:#}"),
+    }
+    Ok(())
+}
+
+/// Détermine l'éditeur à utiliser : `$EDITOR`, puis `$VISUAL`, sinon `nano`,
+/// sinon `vi`.
+fn resolve_editor() -> String {
+    for var in ["EDITOR", "VISUAL"] {
+        if let Ok(v) = std::env::var(var) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    if which("nano") {
+        "nano".to_string()
+    } else {
+        "vi".to_string()
+    }
+}
+
+/// Vrai si un exécutable est présent dans le `PATH`.
+fn which(program: &str) -> bool {
+    let Ok(path) = std::env::var("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| dir.join(program).is_file())
+}
+
+/// `mnemo config validate` : vérifie syntaxe TOML et valeurs connues.
+fn cmd_config_validate() -> Result<()> {
+    let path = config::config_path()?;
+    if !path.exists() {
+        println!(
+            "Aucun fichier de configuration ({}) : valeurs par défaut utilisées (valides).",
+            path.display()
+        );
+        return Ok(());
+    }
+
+    match config::load_and_validate(&path) {
+        Ok((_, issues)) if issues.is_empty() => {
+            println!("Configuration valide : {}", path.display());
+            Ok(())
+        }
+        Ok((_, issues)) => {
+            print_config_issues(&issues);
+            let has_error = issues.iter().any(|i| i.level == config::IssueLevel::Error);
+            if has_error {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        Err(err) => {
+            eprintln!("Configuration invalide : {err:#}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Affiche les problèmes de configuration relevés.
+fn print_config_issues(issues: &[config::ConfigIssue]) {
+    for issue in issues {
+        let tag = match issue.level {
+            config::IssueLevel::Error => "ERREUR",
+            config::IssueLevel::Warning => "ATTENTION",
+        };
+        println!("  [{tag}] {}", issue.message);
     }
 }
 

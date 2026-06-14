@@ -72,6 +72,85 @@ pub fn install_block(bashrc: &std::path::Path) -> anyhow::Result<bool> {
     Ok(true)
 }
 
+/// Résultat d'une réparation du bloc `.bashrc` par `mnemo doctor --fix`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockRepair {
+    /// Bloc ajouté (il était absent).
+    Created,
+    /// Doublons supprimés, un seul bloc propre conservé.
+    Deduplicated,
+    /// Bloc régénéré pour restaurer le raccourci `Ctrl+R`.
+    CtrlRRestored,
+    /// Rien à faire : un unique bloc complet était déjà présent.
+    AlreadyOk,
+}
+
+/// Retire tous les blocs mnemo encadrés par les marqueurs externes.
+///
+/// Fonction pure : ne touche pas au disque. Les lignes situées entre
+/// [`BLOCK_BEGIN`] et [`BLOCK_END`] (inclus) sont supprimées.
+pub fn strip_blocks(content: &str) -> String {
+    let mut out = String::new();
+    let mut in_block = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == BLOCK_BEGIN {
+            in_block = true;
+            continue;
+        }
+        if trimmed == BLOCK_END {
+            in_block = false;
+            continue;
+        }
+        if !in_block {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Répare le bloc mnemo du `.bashrc` : ajoute s'il manque, déduplique s'il est
+/// présent plusieurs fois, ou régénère un bloc complet si `Ctrl+R` a disparu.
+///
+/// Toujours précédé d'une sauvegarde `<bashrc>.mnemo.bak.YYYYMMDD-HHMMSS` avant
+/// toute modification. Non destructif vis-à-vis du reste du fichier.
+pub fn repair_block(bashrc: &std::path::Path) -> anyhow::Result<BlockRepair> {
+    let existing = std::fs::read_to_string(bashrc).unwrap_or_default();
+
+    if !has_block(&existing) {
+        install_block(bashrc)?;
+        return Ok(BlockRepair::Created);
+    }
+
+    let duplicated = count_blocks(&existing) > 1;
+    let missing_ctrl_r = !has_ctrl_r_bind(&existing);
+    if !duplicated && !missing_ctrl_r {
+        return Ok(BlockRepair::AlreadyOk);
+    }
+
+    if bashrc.exists() {
+        let backup = bashrc.with_file_name(format!(".bashrc.mnemo.bak.{}", compact_now()));
+        std::fs::copy(bashrc, &backup)?;
+    }
+
+    let mut content = strip_blocks(&existing);
+    while content.ends_with("\n\n") {
+        content.pop();
+    }
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(&wrapped_block());
+    std::fs::write(bashrc, content)?;
+
+    Ok(if duplicated {
+        BlockRepair::Deduplicated
+    } else {
+        BlockRepair::CtrlRRestored
+    })
+}
+
 const SNIPPET: &str = r#"# >>> mnemo >>>
 # Enregistre automatiquement chaque commande dans mnemo.
 __mnemo_record() {
@@ -134,5 +213,36 @@ mod tests {
 
         let two = format!("{one}\n{one}");
         assert_eq!(count_blocks(&two), 2);
+    }
+
+    #[test]
+    fn strip_blocks_retire_le_bloc_encadre() {
+        let avant = format!("export FOO=1\n{}export BAR=2\n", wrapped_block());
+        let apres = strip_blocks(&avant);
+        assert!(!has_block(&apres));
+        assert!(apres.contains("export FOO=1"));
+        assert!(apres.contains("export BAR=2"));
+    }
+
+    #[test]
+    fn repair_block_deduplique_et_ajoute() {
+        let dir = tempfile::tempdir().unwrap();
+        let bashrc = dir.path().join(".bashrc");
+
+        // Absent -> créé.
+        std::fs::write(&bashrc, "export FOO=1\n").unwrap();
+        assert_eq!(repair_block(&bashrc).unwrap(), BlockRepair::Created);
+        assert_eq!(count_blocks(&std::fs::read_to_string(&bashrc).unwrap()), 1);
+
+        // Déjà correct -> aucune action.
+        assert_eq!(repair_block(&bashrc).unwrap(), BlockRepair::AlreadyOk);
+
+        // Doublon -> dédupliqué.
+        let one = std::fs::read_to_string(&bashrc).unwrap();
+        std::fs::write(&bashrc, format!("{one}{}", wrapped_block())).unwrap();
+        assert_eq!(repair_block(&bashrc).unwrap(), BlockRepair::Deduplicated);
+        let after = std::fs::read_to_string(&bashrc).unwrap();
+        assert_eq!(count_blocks(&after), 1);
+        assert!(has_ctrl_r_bind(&after));
     }
 }

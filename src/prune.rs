@@ -45,7 +45,7 @@ pub fn parse_duration(spec: &str) -> Result<u64> {
 }
 
 /// Horodatage `YYYY-MM-DD HH:MM:SS` correspondant à « il y a `secs` secondes ».
-fn cutoff_timestamp(secs: u64) -> String {
+pub(crate) fn cutoff_timestamp(secs: u64) -> String {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())

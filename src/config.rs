@@ -25,6 +25,8 @@ pub struct Config {
     pub search_limit: usize,
     /// Options propres à `mnemo stats`.
     pub stats: StatsConfig,
+    /// Options de maintenance / nettoyage automatique.
+    pub maintenance: MaintenanceConfig,
 }
 
 /// Configuration de la commande `mnemo stats`.
@@ -37,6 +39,48 @@ pub struct StatsConfig {
     pub ignored_commands: Vec<String>,
 }
 
+/// Configuration du nettoyage automatique (`mnemo maintenance`).
+///
+/// Désactivé par défaut : mnemo ne supprime jamais de données sans action
+/// explicite de l'utilisateur (`--yes`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MaintenanceConfig {
+    /// Active la possibilité de nettoyage automatique par ancienneté.
+    pub auto_prune_enabled: bool,
+    /// Ancienneté au-delà de laquelle les commandes sont éligibles au nettoyage
+    /// (durée lisible : `180d`, `26w`, `6m`, `1y`).
+    pub auto_prune_after: String,
+    /// Crée systématiquement une sauvegarde avant tout nettoyage automatique.
+    pub auto_backup_before_prune: bool,
+}
+
+impl Default for MaintenanceConfig {
+    fn default() -> Self {
+        Self {
+            auto_prune_enabled: false,
+            auto_prune_after: "180d".to_string(),
+            auto_backup_before_prune: true,
+        }
+    }
+}
+
+/// Gravité d'un problème de configuration relevé par [`Config::validate`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IssueLevel {
+    /// Bloquant : la valeur est inutilisable en l'état.
+    Error,
+    /// Non bloquant : la valeur est inhabituelle mais tolérée.
+    Warning,
+}
+
+/// Problème relevé lors de la validation de la configuration.
+#[derive(Debug, Clone)]
+pub struct ConfigIssue {
+    pub level: IssueLevel,
+    pub message: String,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -44,6 +88,7 @@ impl Default for Config {
             ignore_prefixes: vec!["mnemo".to_string()],
             search_limit: 5000,
             stats: StatsConfig::default(),
+            maintenance: MaintenanceConfig::default(),
         }
     }
 }
@@ -103,6 +148,103 @@ impl Config {
         self.stats.ignored_commands.retain(|c| c != &normalized);
         self.stats.ignored_commands.len() != before
     }
+
+    /// Valide les valeurs connues de la configuration. Ne touche pas au disque ;
+    /// renvoie la liste des problèmes détectés (vide = configuration saine).
+    pub fn validate(&self) -> Vec<ConfigIssue> {
+        let mut issues = Vec::new();
+        if self.search_limit == 0 {
+            issues.push(ConfigIssue {
+                level: IssueLevel::Error,
+                message: "search_limit doit être strictement positif".to_string(),
+            });
+        }
+        if crate::prune::parse_duration(&self.maintenance.auto_prune_after).is_err() {
+            issues.push(ConfigIssue {
+                level: IssueLevel::Error,
+                message: format!(
+                    "maintenance.auto_prune_after invalide : {:?} (ex : 180d, 6m, 1y)",
+                    self.maintenance.auto_prune_after
+                ),
+            });
+        }
+        if self.sensitive_keywords.is_empty() {
+            issues.push(ConfigIssue {
+                level: IssueLevel::Warning,
+                message: "sensitive_keywords est vide : aucune commande ne sera filtrée"
+                    .to_string(),
+            });
+        }
+        issues
+    }
+}
+
+/// Clés de premier niveau reconnues dans le fichier TOML (pour signaler les
+/// éventuelles coquilles lors de `mnemo config validate`).
+const KNOWN_TOP_KEYS: &[&str] = &[
+    "sensitive_keywords",
+    "ignore_prefixes",
+    "search_limit",
+    "stats",
+    "maintenance",
+];
+
+/// Charge et valide un fichier de configuration depuis le disque.
+///
+/// Renvoie la config désérialisée et la liste des problèmes (syntaxe TOML mise
+/// à part, qui remonte en `Err`). Détecte aussi les clés de premier niveau
+/// inconnues (probables coquilles) en avertissement.
+pub fn load_and_validate(path: &Path) -> Result<(Config, Vec<ConfigIssue>)> {
+    let raw = std::fs::read_to_string(path)
+        .with_context(|| format!("lecture de la config {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&raw)
+        .with_context(|| format!("syntaxe TOML invalide dans {}", path.display()))?;
+    let cfg: Config = value
+        .clone()
+        .try_into()
+        .with_context(|| format!("structure invalide dans {}", path.display()))?;
+
+    let mut issues = cfg.validate();
+    if let Some(table) = value.as_table() {
+        for key in table.keys() {
+            if !KNOWN_TOP_KEYS.contains(&key.as_str()) {
+                issues.push(ConfigIssue {
+                    level: IssueLevel::Warning,
+                    message: format!("clé inconnue ignorée : {key:?}"),
+                });
+            }
+        }
+    }
+    Ok((cfg, issues))
+}
+
+/// Sauvegarde le fichier de config existant avant écrasement.
+///
+/// Copie `config.toml` vers `config.toml.bak.AAAAMMJJ-HHMMSS`. N'a aucun effet
+/// si le fichier n'existe pas encore. Garantit qu'on n'écrase jamais une
+/// configuration sans en conserver une copie.
+pub fn backup_existing(path: &Path) -> Result<Option<PathBuf>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let stamp = crate::db::now_timestamp()
+        .chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>();
+    let stamp = format!(
+        "{}-{}",
+        &stamp[..8.min(stamp.len())],
+        &stamp[8.min(stamp.len())..]
+    );
+    let backup = path.with_file_name(format!(
+        "{}.bak.{stamp}",
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("config.toml")
+    ));
+    std::fs::copy(path, &backup)
+        .with_context(|| format!("sauvegarde de {} vers {}", path.display(), backup.display()))?;
+    Ok(Some(backup))
 }
 
 pub fn config_dir() -> Result<PathBuf> {

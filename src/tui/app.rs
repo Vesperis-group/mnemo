@@ -107,6 +107,10 @@ pub struct TuiApp {
     pub copy_buffer: Option<String>,
     /// Taille de page courante (mise à jour au rendu).
     pub page_size: usize,
+    /// Projet du dossier de lancement (pour le filtre `p`).
+    pub current_project: Option<String>,
+    /// Branche du dossier de lancement (pour le filtre `b`).
+    pub current_branch: Option<String>,
     matcher: Matcher,
 }
 
@@ -126,10 +130,19 @@ impl TuiApp {
             should_quit: false,
             copy_buffer: None,
             page_size: DEFAULT_PAGE_SIZE,
+            current_project: None,
+            current_branch: None,
             matcher: Matcher::new(NucleoConfig::DEFAULT),
         };
         app.recompute();
         app
+    }
+
+    /// Renseigne le projet et la branche du dossier de lancement, utilisés par
+    /// les raccourcis « filtre projet/branche courant(e) » (`p` / `b`).
+    pub fn set_current_context(&mut self, project: Option<String>, branch: Option<String>) {
+        self.current_project = project;
+        self.current_branch = branch;
     }
 
     // -- Filtrage et recherche ---------------------------------------------
@@ -342,6 +355,75 @@ impl TuiApp {
         self.recompute();
     }
 
+    /// Filtre par le projet du dossier de lancement (raccourci `p`).
+    pub fn filter_project_current(&mut self) {
+        match &self.current_project {
+            Some(project) => {
+                self.filters.project = Some(project.clone());
+                self.status_message = Some(format!("Filtre projet courant = {project}"));
+            }
+            None => {
+                self.status_message = Some("Projet courant indéterminé.".to_string());
+            }
+        }
+        self.recompute();
+    }
+
+    /// Filtre par la branche du dossier de lancement (raccourci `b`).
+    pub fn filter_branch_current(&mut self) {
+        match &self.current_branch {
+            Some(branch) => {
+                self.filters.branch = Some(branch.clone());
+                self.status_message = Some(format!("Filtre branche courante = {branch}"));
+            }
+            None => {
+                self.status_message = Some("Branche courante indéterminée.".to_string());
+            }
+        }
+        self.recompute();
+    }
+
+    /// Donne le focus à la recherche (raccourci `/`).
+    pub fn focus_search(&mut self) {
+        self.mode = TuiMode::Search;
+    }
+
+    /// Exporte les résultats filtrés vers un fichier JSON (raccourci `e`).
+    ///
+    /// Le fichier est créé dans le répertoire courant sous un nom horodaté. En
+    /// cas d'erreur, l'export est signalé dans le pied de page sans interrompre
+    /// la TUI.
+    pub fn export_results(&mut self) {
+        if self.filtered.is_empty() {
+            self.status_message = Some("Aucun résultat à exporter.".to_string());
+            return;
+        }
+        let refs: Vec<&CommandRecord> = self.filtered.iter().map(|&i| &self.records[i]).collect();
+        let json = match crate::export::records_to_json(&refs) {
+            Ok(j) => j,
+            Err(e) => {
+                self.status_message = Some(format!("Export impossible : {e}"));
+                return;
+            }
+        };
+        let stamp: String = crate::db::now_timestamp()
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect();
+        let filename = format!("mnemo-export-{stamp}.json");
+        match std::fs::write(&filename, json) {
+            Ok(()) => {
+                self.status_message = Some(format!(
+                    "{} commande(s) exportée(s) vers {filename}",
+                    refs.len()
+                ));
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Écriture de l'export impossible : {e}"));
+            }
+        }
+    }
+
     // -- Suppression -------------------------------------------------------
 
     /// Passe en mode confirmation si une commande est sélectionnée.
@@ -452,14 +534,18 @@ impl TuiApp {
             Action::ToggleHelp => self.toggle_help(),
             Action::ToggleFilters => self.toggle_filters(),
             Action::ToggleDetailsFocus => self.toggle_details_focus(),
+            Action::FocusSearch => self.focus_search(),
             Action::Refresh => self.refresh(backend),
             Action::Copy => self.copy_selection(),
+            Action::ExportResults => self.export_results(),
             Action::RequestDelete => self.request_delete(),
             Action::ConfirmYes => self.confirm_delete(backend),
             Action::ConfirmNo => self.cancel_delete(),
             Action::FilterProjectFromSelection => self.filter_project_from_selection(),
             Action::FilterBranchFromSelection => self.filter_branch_from_selection(),
             Action::FilterCwdFromSelection => self.filter_cwd_from_selection(),
+            Action::FilterProjectCurrent => self.filter_project_current(),
+            Action::FilterBranchCurrent => self.filter_branch_current(),
             Action::CycleStatusFilter => self.cycle_status_filter(),
             Action::ClearFilters => self.clear_filters(),
             Action::None => {}

@@ -59,6 +59,27 @@ pub enum Command {
         /// Filtre sur une branche Git.
         #[arg(long, value_name = "BRANCHE")]
         branch: Option<String>,
+        /// Filtre sur un code de sortie exact (ex : 0, 1, 127).
+        #[arg(long = "exit-code", value_name = "CODE")]
+        exit_code: Option<i64>,
+        /// N'affiche que les commandes en échec (exit_code ≠ 0).
+        #[arg(long, conflicts_with = "exit_code")]
+        failed: bool,
+        /// Limite l'âge des résultats (durée `7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
+        #[arg(long, value_name = "DURÉE|DATE")]
+        since: Option<String>,
+        /// N'affiche que les commandes antérieures à une date (`AAAA-MM-JJ`).
+        #[arg(long, value_name = "DATE")]
+        before: Option<String>,
+        /// Filtre sur un répertoire de travail exact.
+        #[arg(long, value_name = "CHEMIN")]
+        cwd: Option<String>,
+        /// Filtre sur un shell exact (ex : bash, zsh).
+        #[arg(long, value_name = "SHELL")]
+        shell: Option<String>,
+        /// Avec --print, produit une sortie JSON stable.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Ouvre la TUI avancée (interface interactive principale).
@@ -87,12 +108,15 @@ pub enum Command {
 
     /// Affiche des statistiques d'usage (texte simple).
     Stats {
-        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        /// Filtre sur un projet Git (nom du dossier racine, chemin git_root, ou `current`).
         #[arg(long, value_name = "NOM")]
         project: Option<String>,
         /// Filtre sur une branche Git.
         #[arg(long, value_name = "BRANCHE")]
         branch: Option<String>,
+        /// Limite la fenêtre d'analyse (durée `7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
+        #[arg(long, value_name = "DURÉE|DATE")]
+        since: Option<String>,
         /// Produit une sortie JSON exploitable.
         #[arg(long)]
         json: bool,
@@ -150,6 +174,9 @@ pub enum Command {
         /// Fichier de sortie (défaut : stdout).
         #[arg(long, value_name = "FICHIER")]
         output: Option<PathBuf>,
+        /// Compresse la sortie en gzip (`.json.gz` / `.csv.gz`).
+        #[arg(long)]
+        gzip: bool,
     },
 
     /// Affiche les dernières commandes avec leurs IDs.
@@ -257,14 +284,75 @@ pub enum Command {
         #[arg(long)]
         purge: bool,
     },
+
+    /// Inspecte le projet courant et les projets connus de l'historique.
+    Project {
+        #[command(subcommand)]
+        action: ProjectCommand,
+    },
+
+    /// Maintenance de l'historique (nettoyage automatique configurable).
+    Maintenance {
+        #[command(subcommand)]
+        action: MaintenanceCommand,
+    },
+}
+
+/// Regroupe les options de `mnemo search` pour éviter une fonction à trop
+/// d'arguments (filtres combinables passés en un bloc).
+#[derive(Debug, Default)]
+pub struct SearchArgs {
+    pub query: Option<String>,
+    pub print: bool,
+    pub limit: usize,
+    pub project: Option<String>,
+    pub branch: Option<String>,
+    pub exit_code: Option<i64>,
+    pub failed: bool,
+    pub since: Option<String>,
+    pub before: Option<String>,
+    pub cwd: Option<String>,
+    pub shell: Option<String>,
+    pub json: bool,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommand {
+    /// Affiche la configuration effective (valeurs par défaut incluses).
+    Show,
+    /// Affiche le chemin du fichier de configuration.
+    Path,
+    /// Ouvre la configuration dans l'éditeur ($EDITOR, sinon nano/vi).
+    Edit,
+    /// Vérifie la validité du fichier de configuration.
+    Validate,
     /// Gère la liste des commandes ignorées dans `mnemo stats`.
     StatsIgnore {
         #[command(subcommand)]
         action: StatsIgnoreCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ProjectCommand {
+    /// Affiche le projet détecté pour le répertoire courant.
+    Current,
+    /// Liste les projets connus de l'historique.
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MaintenanceCommand {
+    /// Affiche l'état de la maintenance et ce qui serait nettoyé.
+    Status,
+    /// Exécute le nettoyage configuré.
+    Run {
+        /// Montre ce qui serait supprimé sans rien modifier.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Confirme le nettoyage sans question interactive.
+        #[arg(long)]
+        yes: bool,
     },
 }
 

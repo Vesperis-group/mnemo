@@ -100,12 +100,40 @@ pub fn run(fix: bool, json: bool) -> Result<i32> {
 // ---------------------------------------------------------------------------
 
 fn apply_fixes(report: &mut Report) -> Result<()> {
+    let mut fixes = 0usize;
+
+    // 0. Dossiers de données / configuration (créés en amont si absents).
+    for (name, dir) in [
+        (
+            "fix.dir.config",
+            config::config_path()?.parent().map(Path::to_path_buf),
+        ),
+        (
+            "fix.dir.data",
+            config::db_path()?.parent().map(Path::to_path_buf),
+        ),
+    ] {
+        if let Some(dir) = dir {
+            if dir.as_os_str().is_empty() || dir.exists() {
+                continue;
+            }
+            std::fs::create_dir_all(&dir)?;
+            fixes += 1;
+            report.push(
+                name,
+                Status::Ok,
+                format!("Dossier créé : {}", dir.display()),
+            );
+        }
+    }
+
     // 1. Config.
     let cfg_path = config::config_path()?;
     if cfg_path.exists() {
         report.push("fix.config", Status::Info, "Configuration déjà présente");
     } else {
         config::Config::default().save(&cfg_path)?;
+        fixes += 1;
         report.push(
             "fix.config",
             Status::Ok,
@@ -120,6 +148,7 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
     if db_existait {
         report.push("fix.db", Status::Info, "Base de données déjà présente");
     } else {
+        fixes += 1;
         report.push(
             "fix.db",
             Status::Ok,
@@ -127,18 +156,41 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
         );
     }
 
-    // 3. Bloc .bashrc (ajout avec sauvegarde, sans doublon).
+    // 3. Permissions trop permissives sur la config et la base (chmod 600).
+    fixes += fix_permissions(report, "fix.config.perms", &cfg_path);
+    fixes += fix_permissions(report, "fix.db.perms", &db_path);
+
+    // 4. Bloc .bashrc : ajout / déduplication / restauration du Ctrl+R.
     if let Some(bashrc) = bashrc_path() {
-        match shell::install_block(&bashrc) {
-            Ok(true) => report.push(
-                "fix.bashrc",
-                Status::Ok,
-                "Bloc mnemo ajouté au .bashrc (sauvegarde créée)",
-            ),
-            Ok(false) => report.push(
+        match shell::repair_block(&bashrc) {
+            Ok(shell::BlockRepair::Created) => {
+                fixes += 1;
+                report.push(
+                    "fix.bashrc",
+                    Status::Ok,
+                    "Bloc mnemo ajouté au .bashrc (sauvegarde créée)",
+                );
+            }
+            Ok(shell::BlockRepair::Deduplicated) => {
+                fixes += 1;
+                report.push(
+                    "fix.bashrc",
+                    Status::Ok,
+                    "Bloc mnemo dupliqué supprimé, un seul conservé (sauvegarde créée)",
+                );
+            }
+            Ok(shell::BlockRepair::CtrlRRestored) => {
+                fixes += 1;
+                report.push(
+                    "fix.bashrc",
+                    Status::Ok,
+                    "Raccourci Ctrl+R restauré dans le bloc mnemo (sauvegarde créée)",
+                );
+            }
+            Ok(shell::BlockRepair::AlreadyOk) => report.push(
                 "fix.bashrc",
                 Status::Info,
-                "Bloc mnemo déjà présent (aucune modification)",
+                "Bloc mnemo déjà présent et complet (aucune modification)",
             ),
             Err(e) => report.push(
                 "fix.bashrc",
@@ -148,7 +200,7 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
         }
     }
 
-    // 4. PATH : message clair, jamais de modification automatique.
+    // 5. PATH : message clair, jamais de modification automatique.
     if let Some(local_bin) = local_bin_dir() {
         if !path_contains(&local_bin) {
             report.push(
@@ -162,7 +214,54 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
         }
     }
 
+    // Résumé des corrections appliquées.
+    if fixes > 0 {
+        report.push(
+            "fix.summary",
+            Status::Ok,
+            format!("Corrections appliquées : {fixes}"),
+        );
+    } else {
+        report.push("fix.summary", Status::Info, "Aucune correction nécessaire");
+    }
+
     Ok(())
+}
+
+/// Resserre les permissions d'un fichier à `0o600` s'il est accessible au
+/// groupe ou aux autres. Retourne `1` si une correction a été appliquée.
+fn fix_permissions(report: &mut Report, name: &str, path: &Path) -> usize {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if !path.exists() {
+            return 0;
+        }
+        let Ok(meta) = std::fs::metadata(path) else {
+            return 0;
+        };
+        let mode = meta.permissions().mode() & 0o777;
+        if mode & 0o077 == 0 {
+            return 0;
+        }
+        let mut perms = meta.permissions();
+        perms.set_mode(0o600);
+        if let Err(e) = std::fs::set_permissions(path, perms) {
+            report.push(name, Status::Warn, format!("Permissions inchangées : {e}"));
+            return 0;
+        }
+        report.push(
+            name,
+            Status::Ok,
+            format!("Permissions resserrées à 600 : {}", path.display()),
+        );
+        1
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (report, name, path);
+        0
+    }
 }
 
 // ---------------------------------------------------------------------------

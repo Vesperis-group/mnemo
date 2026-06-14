@@ -28,10 +28,13 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 
 ### M1 - Perte accidentelle de données
 - **Menace** : suppression involontaire de la base / config via `delete`,
-  `prune`, `restore` ou `uninstall`.
+  `prune`, `maintenance run`, `restore` ou `uninstall`.
 - **Mitigations** : `--dry-run` partout ; confirmation obligatoire (refus en
   non-interactif sans `--yes`) ; **sauvegarde automatique** avant toute action
-  destructive ; `uninstall` conserve les données par défaut.
+  destructive ; `uninstall` conserve les données par défaut. Le nettoyage
+  automatique (`maintenance run`) est **désactivé par défaut**
+  (`auto_prune_enabled = false`), exige `--yes`, et crée une sauvegarde avant
+  purge si `auto_backup_before_prune = true`.
 - **Risque résiduel** : un utilisateur passant `--yes --purge` en connaissance
   de cause supprime ses données (une sauvegarde de sécurité reste créée avant).
 
