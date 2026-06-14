@@ -260,3 +260,27 @@ adossé à des tests automatisés (référencés entre parenthèses).
     silencieuse, et chaque correction (config, base, sauvegardes) est comptée
     dans le résumé `Corrections appliquées : X` et le total `FIX`.
     (`tests/doctor.rs::doctor_fix_reporte_explicitement_la_db`)
+
+## Interface TUI (pré-v1.0)
+
+34. **Le rendu de la TUI ne panique jamais, quelle que soit la taille.**
+    Le rendu reste robuste sur terminal très petit (avertissement dédié),
+    étroit (panneau de détails masqué), court (barre de synthèse masquée),
+    aux dimensions minimales, sans sélection et avec des commandes très
+    longues. Le formatage tronque sur les **caractères** (UTF-8 sûr) sans
+    jamais découper un octet.
+    (`src/tui/ui.rs::tests::{rendu_dimensions_standard_sans_panique,
+    rendu_terminal_etroit_masque_details, rendu_terminal_court_masque_synthese,
+    rendu_dimensions_minimales_sans_panique, rendu_liste_vide_sans_panique,
+    rendu_commande_tres_longue_sans_panique, rendu_tous_les_overlays_sans_panique}`,
+    `src/tui/format.rs::tests::*`)
+
+35. **La synthèse (KPI) reflète fidèlement les commandes visibles.**
+    Total, visibles, succès, échecs, taux d'échec, projets distincts et shell
+    dominant sont calculés de façon déterministe ; succès et échecs portent sur
+    les commandes **visibles** (après filtres), le total sur l'ensemble chargé.
+    Le taux d'échec vaut `0.0` en l'absence de commande exécutée visible.
+    (`src/tui/app.rs::tests::{overview_compte_succes_echecs_projets_et_shell,
+    overview_taux_echec_nul_sans_commande_executee,
+    overview_suit_les_filtres_visibles}`)
+
