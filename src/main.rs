@@ -3,8 +3,11 @@ mod config;
 mod db;
 mod doctor;
 mod filter;
+mod gitctx;
 mod importer;
+mod migrations;
 mod shell;
+mod stats;
 mod tui;
 mod version;
 
@@ -29,11 +32,15 @@ fn main() -> Result<()> {
             query_opt,
             print,
             limit,
-        } => cmd_search(query.or(query_opt), print, limit),
+            project,
+            branch,
+        } => cmd_search(query.or(query_opt), print, limit, project, branch),
         Command::Bashrc => {
             print!("{}", shell::bashrc_snippet());
             Ok(())
         }
+        Command::Migrate => cmd_migrate(),
+        Command::Stats => stats::run(),
         Command::Doctor { fix, json } => {
             let code = doctor::run(fix, json)?;
             std::process::exit(code);
@@ -104,29 +111,55 @@ fn cmd_add(cmd: String, cwd: Option<String>, exit_code: i64) -> Result<()> {
         return Ok(());
     }
 
+    // Répertoire de travail effectif : argument explicite ou répertoire courant.
+    let resolved_cwd = cwd.or_else(|| {
+        std::env::current_dir()
+            .ok()
+            .map(|p| p.display().to_string())
+    });
+
+    // Détection Git (optionnelle) sur ce répertoire.
+    let git = resolved_cwd
+        .as_deref()
+        .map(|p| gitctx::detect(std::path::Path::new(p)))
+        .unwrap_or_default();
+
     let conn = db::open(&config::db_path()?)?;
     let new = db::NewCommand {
         command: trimmed.to_string(),
-        cwd: cwd.or_else(|| {
-            std::env::current_dir()
-                .ok()
-                .map(|p| p.display().to_string())
-        }),
+        cwd: resolved_cwd,
         shell: Some("bash".to_string()),
         hostname: hostname(),
         exit_code: Some(exit_code),
         created_at: db::now_timestamp(),
+        git_root: git.root,
+        git_branch: git.branch,
+        git_remote: git.remote,
+        session_id: std::env::var("MNEMO_SESSION_ID")
+            .ok()
+            .filter(|s| !s.trim().is_empty()),
     };
     db::insert_command(&conn, &new)?;
     Ok(())
 }
 
-fn cmd_search(query: Option<String>, print: bool, limit: usize) -> Result<()> {
+fn cmd_search(
+    query: Option<String>,
+    print: bool,
+    limit: usize,
+    project: Option<String>,
+    branch: Option<String>,
+) -> Result<()> {
     let cfg = config::Config::load()?;
     let conn = db::open(&config::db_path()?)?;
-    let records = db::fetch_all(&conn, cfg.search_limit)?;
+    let filter = db::SearchFilter { project, branch };
+    let records = db::fetch_filtered(&conn, &filter, cfg.search_limit)?;
     if records.is_empty() {
-        eprintln!("Aucune commande enregistrée. Lancez `mnemo import` d'abord.");
+        if filter.is_empty() {
+            eprintln!("Aucune commande enregistrée. Lancez `mnemo import` d'abord.");
+        } else {
+            eprintln!("Aucune commande ne correspond à ce filtre Git.");
+        }
         return Ok(());
     }
 
@@ -141,6 +174,19 @@ fn cmd_search(query: Option<String>, print: bool, limit: usize) -> Result<()> {
 
     if let Some(selected) = tui::run(records, query.unwrap_or_default())? {
         println!("{selected}");
+    }
+    Ok(())
+}
+
+/// Applique les migrations de schéma en attente et rend compte de la transition.
+fn cmd_migrate() -> Result<()> {
+    let db_path = config::db_path()?;
+    let (_conn, outcome) = db::open_and_migrate(&db_path)?;
+    println!("Base de données : {}", db_path.display());
+    if outcome.migrated() {
+        println!("Schéma migré : v{} -> v{}", outcome.from, outcome.to);
+    } else {
+        println!("Schéma déjà à jour : v{} (aucune migration)", outcome.to);
     }
     Ok(())
 }

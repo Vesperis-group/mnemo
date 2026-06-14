@@ -3,8 +3,10 @@ use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::migrations;
+
 /// Données nécessaires pour insérer une nouvelle commande.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NewCommand {
     pub command: String,
     pub cwd: Option<String>,
@@ -12,6 +14,14 @@ pub struct NewCommand {
     pub hostname: Option<String>,
     pub exit_code: Option<i64>,
     pub created_at: String,
+    /// Racine du dépôt Git (`git rev-parse --show-toplevel`), si applicable.
+    pub git_root: Option<String>,
+    /// Branche Git courante, si applicable.
+    pub git_branch: Option<String>,
+    /// URL du remote `origin`, si applicable.
+    pub git_remote: Option<String>,
+    /// Identifiant de session shell, si fourni (`MNEMO_SESSION_ID`).
+    pub session_id: Option<String>,
 }
 
 /// Commande lue depuis la base.
@@ -28,6 +38,26 @@ pub struct CommandRecord {
     pub hostname: Option<String>,
     pub exit_code: Option<i64>,
     pub created_at: String,
+    pub git_root: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_remote: Option<String>,
+    pub session_id: Option<String>,
+}
+
+/// Filtre optionnel appliqué à la recherche (contexte Git).
+#[derive(Debug, Clone, Default)]
+pub struct SearchFilter {
+    /// Filtre sur le projet : nom du dossier racine Git ou chemin `git_root`.
+    pub project: Option<String>,
+    /// Filtre sur la branche Git.
+    pub branch: Option<String>,
+}
+
+impl SearchFilter {
+    /// Vrai si aucun critère n'est défini.
+    pub fn is_empty(&self) -> bool {
+        self.project.is_none() && self.branch.is_none()
+    }
 }
 
 /// Ouvre (ou crée) la base SQLite sur disque et initialise le schéma.
@@ -38,15 +68,28 @@ pub fn open(path: &Path) -> Result<Connection> {
     }
     let conn = Connection::open(path)
         .with_context(|| format!("ouverture de la base {}", path.display()))?;
-    init_schema(&conn)?;
+    migrations::apply(&conn)?;
     Ok(conn)
+}
+
+/// Ouvre la base et renvoie aussi le résultat des migrations appliquées.
+/// Utilisé par `mnemo migrate` pour rendre compte de la transition de schéma.
+pub fn open_and_migrate(path: &Path) -> Result<(Connection, migrations::Outcome)> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("création du dossier {}", parent.display()))?;
+    }
+    let conn = Connection::open(path)
+        .with_context(|| format!("ouverture de la base {}", path.display()))?;
+    let outcome = migrations::apply(&conn)?;
+    Ok((conn, outcome))
 }
 
 /// Base SQLite en mémoire (utilisée pour les tests).
 #[cfg(test)]
 pub fn open_in_memory() -> Result<Connection> {
     let conn = Connection::open_in_memory()?;
-    init_schema(&conn)?;
+    migrations::apply(&conn)?;
     Ok(conn)
 }
 
@@ -66,23 +109,6 @@ pub fn table_exists(conn: &Connection, name: &str) -> Result<bool> {
         |row| row.get(0),
     )?;
     Ok(n > 0)
-}
-
-fn init_schema(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS commands (
-            id          INTEGER PRIMARY KEY,
-            command     TEXT NOT NULL,
-            cwd         TEXT,
-            shell       TEXT,
-            hostname    TEXT,
-            exit_code   INTEGER,
-            created_at  TEXT NOT NULL,
-            hash        TEXT UNIQUE
-        );
-        CREATE INDEX IF NOT EXISTS idx_commands_created_at ON commands(created_at);",
-    )?;
-    Ok(())
 }
 
 /// Hash FNV-1a 64 bits, déterministe, utilisé pour le dédoublonnage.
@@ -116,8 +142,9 @@ pub fn insert_command(conn: &Connection, cmd: &NewCommand) -> Result<bool> {
     let hash = compute_hash(&cmd.command, cmd.cwd.as_deref());
     let changed = conn.execute(
         "INSERT OR IGNORE INTO commands
-            (command, cwd, shell, hostname, exit_code, created_at, hash)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            (command, cwd, shell, hostname, exit_code, created_at, hash,
+             git_root, git_branch, git_remote, session_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         rusqlite::params![
             cmd.command,
             cmd.cwd,
@@ -126,36 +153,84 @@ pub fn insert_command(conn: &Connection, cmd: &NewCommand) -> Result<bool> {
             cmd.exit_code,
             cmd.created_at,
             hash,
+            cmd.git_root,
+            cmd.git_branch,
+            cmd.git_remote,
+            cmd.session_id,
         ],
     )?;
     Ok(changed > 0)
 }
 
 /// Charge les commandes les plus récentes (limite paramétrable).
+#[allow(dead_code)]
 pub fn fetch_all(conn: &Connection, limit: usize) -> Result<Vec<CommandRecord>> {
+    fetch_filtered(conn, &SearchFilter::default(), limit)
+}
+
+/// Charge les commandes les plus récentes en appliquant un filtre de contexte
+/// Git optionnel (projet / branche). Le filtrage fuzzy sur le texte de la
+/// commande reste à la charge de l'appelant.
+pub fn fetch_filtered(
+    conn: &Connection,
+    filter: &SearchFilter,
+    limit: usize,
+) -> Result<Vec<CommandRecord>> {
+    // `project` correspond soit au chemin complet `git_root`, soit au nom du
+    // dossier racine (dernier segment du chemin).
+    let project_suffix = filter.project.as_ref().map(|p| format!("%/{p}"));
     let mut stmt = conn.prepare(
-        "SELECT id, command, cwd, shell, hostname, exit_code, created_at
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
          FROM commands
+         WHERE (?1 IS NULL OR git_branch = ?1)
+           AND (?2 IS NULL OR git_root = ?2 OR git_root LIKE ?3)
          ORDER BY created_at DESC, id DESC
-         LIMIT ?1",
+         LIMIT ?4",
     )?;
-    let rows = stmt.query_map([limit as i64], |row| {
-        Ok(CommandRecord {
-            id: row.get(0)?,
-            command: row.get(1)?,
-            cwd: row.get(2)?,
-            shell: row.get(3)?,
-            hostname: row.get(4)?,
-            exit_code: row.get(5)?,
-            created_at: row.get(6)?,
-        })
-    })?;
+    let rows = stmt.query_map(
+        rusqlite::params![filter.branch, filter.project, project_suffix, limit as i64],
+        row_to_record,
+    )?;
 
     let mut out = Vec::new();
     for row in rows {
         out.push(row?);
     }
     Ok(out)
+}
+
+/// Charge toutes les commandes (sans limite), pour le calcul des statistiques.
+pub fn all_commands(conn: &Connection) -> Result<Vec<CommandRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands
+         ORDER BY created_at DESC, id DESC",
+    )?;
+    let rows = stmt.query_map([], row_to_record)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Convertit une ligne SQL en [`CommandRecord`].
+fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<CommandRecord> {
+    Ok(CommandRecord {
+        id: row.get(0)?,
+        command: row.get(1)?,
+        cwd: row.get(2)?,
+        shell: row.get(3)?,
+        hostname: row.get(4)?,
+        exit_code: row.get(5)?,
+        created_at: row.get(6)?,
+        git_root: row.get(7)?,
+        git_branch: row.get(8)?,
+        git_remote: row.get(9)?,
+        session_id: row.get(10)?,
+    })
 }
 
 /// Nombre total de commandes stockées.
@@ -222,6 +297,7 @@ mod tests {
             hostname: Some("host".into()),
             exit_code: Some(0),
             created_at: now_timestamp(),
+            ..Default::default()
         };
         assert!(insert_command(&conn, &cmd).unwrap());
         // Même hash -> doublon ignoré.
@@ -242,6 +318,7 @@ mod tests {
                     hostname: None,
                     exit_code: None,
                     created_at: now_timestamp(),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -256,5 +333,79 @@ mod tests {
         assert_eq!(format_timestamp(1_609_459_200), "2021-01-01 00:00:00");
         // 0 = 1970-01-01 00:00:00 UTC
         assert_eq!(format_timestamp(0), "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn fetch_filtered_par_projet_et_branche() {
+        let conn = open_in_memory().unwrap();
+        let insert = |command: &str, root: &str, branch: &str| {
+            insert_command(
+                &conn,
+                &NewCommand {
+                    command: command.into(),
+                    cwd: Some(root.into()),
+                    created_at: now_timestamp(),
+                    git_root: Some(root.into()),
+                    git_branch: Some(branch.into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        };
+        insert("cargo build", "/home/u/proj/mnemo", "main");
+        insert("cargo test", "/home/u/proj/mnemo", "dev");
+        insert("ls", "/home/u/proj/autre", "main");
+
+        // Filtre par nom de projet (dernier segment du chemin).
+        let by_name = fetch_filtered(
+            &conn,
+            &SearchFilter {
+                project: Some("mnemo".into()),
+                branch: None,
+            },
+            100,
+        )
+        .unwrap();
+        assert_eq!(by_name.len(), 2);
+        assert!(by_name
+            .iter()
+            .all(|r| r.git_root.as_deref() == Some("/home/u/proj/mnemo")));
+
+        // Filtre par chemin git_root complet.
+        let by_path = fetch_filtered(
+            &conn,
+            &SearchFilter {
+                project: Some("/home/u/proj/autre".into()),
+                branch: None,
+            },
+            100,
+        )
+        .unwrap();
+        assert_eq!(by_path.len(), 1);
+
+        // Filtre par branche.
+        let by_branch = fetch_filtered(
+            &conn,
+            &SearchFilter {
+                project: None,
+                branch: Some("main".into()),
+            },
+            100,
+        )
+        .unwrap();
+        assert_eq!(by_branch.len(), 2);
+
+        // Combinaison projet + branche.
+        let both = fetch_filtered(
+            &conn,
+            &SearchFilter {
+                project: Some("mnemo".into()),
+                branch: Some("dev".into()),
+            },
+            100,
+        )
+        .unwrap();
+        assert_eq!(both.len(), 1);
+        assert_eq!(both[0].command, "cargo test");
     }
 }

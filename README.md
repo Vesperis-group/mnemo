@@ -227,11 +227,37 @@ make uninstall
 | `mnemo search [requête]` | Ouvre la TUI interactive ; la commande choisie est imprimée sur stdout. |
 | `mnemo search <requête> --print [--limit N]` | **Mode non interactif** : imprime les résultats sur stdout, sans TUI. |
 | `mnemo search --query <requête> --print` | Variante avec option explicite `--query`. |
+| `mnemo search <requête> [--project <nom>] [--branch <branche>]` | Filtre par contexte Git (projet / branche), compatible avec `--print` et la TUI. |
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
+| `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
+| `mnemo stats` | Affiche des statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
 
 Le mode `--print` garde le comportement TUI **par défaut** (sans `--print`).
+
+### Contexte Git et statistiques
+
+Depuis la v0.2, chaque commande ajoutée via `mnemo add` est enrichie du contexte
+Git de son répertoire (racine du dépôt, branche, remote `origin`) **lorsque
+disponible**. Git reste **optionnel** : hors dépôt, ou si Git est absent, ces
+champs valent `NULL` et rien ne change.
+
+```bash
+# Recherche filtrée par projet (nom du dossier racine Git ou chemin git_root)
+mnemo search docker --project mnemo
+mnemo search cargo --branch main
+mnemo search --print --project mnemo
+
+# Statistiques d'usage
+mnemo stats
+```
+
+Le schéma SQLite est versionné (`PRAGMA user_version`). Les bases existantes sont
+migrées automatiquement et **sans perte** au premier usage ; `mnemo migrate`
+permet de déclencher la migration explicitement, et `mnemo doctor` affiche la
+version de schéma courante / attendue.
+
 
 ---
 

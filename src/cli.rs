@@ -51,10 +51,22 @@ pub enum Command {
         /// Nombre maximal de résultats affichés en mode --print.
         #[arg(long, default_value_t = 20)]
         limit: usize,
+        /// Filtre sur un projet Git (nom du dossier racine ou chemin git_root).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
     },
 
     /// Affiche le snippet d'intégration Bash à ajouter dans ~/.bashrc.
     Bashrc,
+
+    /// Applique les migrations de schéma SQLite en attente.
+    Migrate,
+
+    /// Affiche des statistiques d'usage (texte simple).
+    Stats,
 
     /// Diagnostique l'installation locale de mnemo.
     Doctor {

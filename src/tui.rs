@@ -265,6 +265,10 @@ mod tests {
             hostname: None,
             exit_code: None,
             created_at: "2026-06-13 10:00:00".to_string(),
+            git_root: None,
+            git_branch: None,
+            git_remote: None,
+            session_id: None,
         }
     }
 
