@@ -974,6 +974,29 @@ mnemo est outillé comme un vrai projet DevSecOps :
   des sources. `RUSTSEC-2024-0436` (`paste`) est accepté temporairement car
   transitif via `ratatui` (advisory `unmaintained`, pas une vulnérabilité
   active) ; suivi pour suppression lors d'une mise à jour future de Ratatui.
+- **Chaîne de release durcie** :
+  - Release **bloquée** si la qualité (`fmt`/`clippy`/`tests`/`build`) ou
+    l'audit (`cargo deny`/`cargo audit`/`gitleaks`) échoue : le job `publish`
+    déclare `needs: [quality, audit]` et `if: success()`.
+  - Assets publiés avec leur **checksum SHA-256** (`.tar.gz` + `.tar.gz.sha256`,
+    glibc et musl), vérifié au packaging (`sha256sum -c`).
+  - Actions GitHub **épinglées par SHA** de commit ; binaire `gitleaks` vérifié
+    par SHA-256 avant exécution (pas de `curl | bash`).
+  - **Versions d'outillage figées** (aucun canal flottant) : Rust épinglé par
+    [rust-toolchain.toml](rust-toolchain.toml) (`1.96.0` + `rustfmt`/`clippy` +
+    cible musl, lu par le `rustup` du runner — pas d'action tierce de
+    toolchain) ; Node.js épinglé par [.node-version](.node-version) (`24.15.0`,
+    via `node-version-file`) ; outils Cargo (`cargo-audit`, `cargo-deny`,
+    `cargo-machete`) installés en **version exacte** (`--version … --locked`).
+  - **Runners épinglés** : `ubuntu-24.04` (et `ubuntu-22.04` pour l'asset GNU
+    lié à la glibc 2.35), jamais `ubuntu-latest`.
+  - **Lockfiles obligatoires** (`Cargo.lock`, `package-lock.json`) ; CI en
+    `cargo … --locked` et `npm ci` (pas de mise à jour implicite).
+  - **Permissions minimales** : `contents: read` partout, `contents: write`
+    uniquement dans le job de publication.
+
+  Détails complets dans [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md), section
+  « Durcissement CI/CD et chaîne de release ».
 
 ---
 

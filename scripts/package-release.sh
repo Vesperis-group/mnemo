@@ -68,6 +68,12 @@ cp scripts/lib/bashrc.sh "${STAGE}/scripts/lib/"
 tar -czf "${ARCHIVE}" "${STAGE}"
 sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
 
+# Vérification immédiate du checksum généré : si l'empreinte ne correspond pas
+# à l'archive (corruption, troncature), on échoue ici. `set -e` interrompt alors
+# le packaging et, en release, release-it avorte → aucune publication possible
+# avec un asset/checksum invalide.
+sha256sum -c "${ARCHIVE}.sha256"
+
 rm -rf "${STAGE}"
 
 echo "Archive créée : ${ARCHIVE}"

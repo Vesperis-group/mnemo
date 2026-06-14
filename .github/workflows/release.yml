@@ -24,10 +24,12 @@ on:
   push:
     branches: [main]
 
-# Permissions minimales nécessaires à release-it.
+# Permissions minimales par défaut : lecture seule. Seul le job `publish`
+# élève ses permissions à `contents: write` (création de release/tag/commit).
+# Les jobs de qualité et d'audit n'ont jamais accès en écriture ni au token de
+# publication.
 permissions:
-  contents: write # commit, tag, push, création de release
-  pull-requests: read # lecture du contexte des PR (changelog)
+  contents: read
 
 concurrency:
   group: release
@@ -36,15 +38,151 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# ---------------------------------------------------------------------------
+# Chaîne de publication STRICTEMENT séquencée :
+#
+#   quality ─┐
+#            ├─► publish   (needs: [quality, audit], if: success())
+#   audit  ──┘
+#
+# Aucune release n'est publiée si la qualité (fmt/clippy/tests/build) OU
+# l'audit (cargo-deny/cargo-audit/gitleaks) échoue. Le packaging produit des
+# archives glibc + musl avec leur `.sha256`, vérifiées (`sha256sum -c`) par
+# scripts/package-release.sh ; un checksum invalide avorte la publication.
+#
+# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
+# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
+# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
+#
+# Rust figé par rust-toolchain.toml (rustup du runner ; pas de canal flottant
+# ni d'action tierce pour la toolchain). Node figé par .node-version. Outils
+# cargo d'audit installés en VERSION EXACTE. Les jobs `quality`/`publish`
+# restent sur ubuntu-22.04 (lien glibc 2.35 volontaire pour l'asset GNU).
+# ---------------------------------------------------------------------------
+
 jobs:
-  release:
-    name: Build Linux (musl + glibc2.35) et publication
-    # glibc 2.35 : le binaire GNU est lié à la glibc du runner.
+  # ----- 1. Qualité : fmt, clippy, tests, build (bloquant) -----
+  quality:
+    name: Quality gate (fmt, clippy, tests, build)
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
+
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          prefix-key: v0-rust-ubuntu2204
+
+      - name: Fetch dependencies (locked)
+        run: cargo fetch --locked
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked
+
+      - name: Build release (sanity)
+        run: cargo build --locked --release
+
+      - name: Build musl (sanity)
+        run: cargo build --locked --release --target x86_64-unknown-linux-musl
+
+      - name: Shell scripts syntax check
+        run: |
+          bash -n scripts/install.sh
+          bash -n scripts/uninstall.sh
+          bash -n scripts/lib/bashrc.sh
+          bash -n scripts/package-release.sh
+
+  # ----- 2. Audit supply chain : cargo-deny, cargo-audit, gitleaks (bloquant) -----
+  audit:
+    name: Audit supply chain (deny, audit, gitleaks)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    steps:
+      - name: Checkout (historique complet pour gitleaks)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Fetch dependencies (locked)
+        run: cargo fetch --locked
+
+      - name: Install audit tools (versions exactes)
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo install cargo-deny --version 0.19.8 --locked
+
+      - name: Print tool versions
+        run: |
+          cargo audit --version
+          cargo deny --version
+
+      - name: cargo audit (vulnérabilités RustSec)
+        run: cargo audit
+
+      - name: cargo deny check (licences, avis, sources)
+        run: cargo deny check
+
+      - name: Install gitleaks CLI (checksum vérifié)
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION="8.27.2"
+          GITLEAKS_SHA256="141c3b2dede46d8b3a53b47116da756bd223decc0374797559a6b50ecba5590c"
+          curl -fsSL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks
+        run: gitleaks detect --source . --redact --verbose --exit-code 1
+
+  # ----- 3. Publication : build + package + checksum + GitHub Release -----
+  # Ne s'exécute QUE si `quality` ET `audit` ont réussi. Seul ce job dispose de
+  # `contents: write` et reçoit le token de publication.
+  publish:
+    name: Build Linux (musl + glibc2.35) et publication
+    needs: [quality, audit]
+    if: ${{ success() && !contains(github.event.head_commit.message, '[skip ci]') }}
+    # glibc 2.35 : le binaire GNU est lié à la glibc du runner.
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write # commit, tag, push, création de release
+      pull-requests: read # lecture du contexte des PR (changelog)
+    steps:
       - name: Checkout (historique complet)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
           # RELEASE_TOKEN (PAT) si main est protégée et n'autorise pas le
@@ -52,17 +190,17 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           persist-credentials: true
 
-      - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-          targets: x86_64-unknown-linux-musl
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
 
       - name: Install musl tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           # IMPORTANT : la clé par défaut ne distingue pas la version d'image
           # (« Linux » seulement). Les artefacts hôte de build-scripts compilés
@@ -72,33 +210,25 @@ jobs:
           # image de runner.
           prefix-key: v0-rust-ubuntu2204
 
-      - name: Setup Node.js (LTS)
-        uses: actions/setup-node@v4
+      - name: Setup Node.js (.node-version)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: lts/*
+          node-version-file: ".node-version"
           cache: npm
 
       - name: Install release tooling
         run: npm ci
 
-      # ----- Quality gate complet avant toute release -----
-      - name: Format check
-        run: cargo fmt --all -- --check
+      - name: Audit des dépendances npm (prod)
+        run: npm audit --omit=dev
 
-      - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Tests
-        run: cargo test
-
-      - name: Build release (sanity)
-        run: cargo build --release
-
-      - name: Build musl (sanity)
-        run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: Fetch dependencies (locked)
+        run: cargo fetch --locked
 
       - name: Inspect binaries (file / ldd)
         run: |
+          cargo build --locked --release
+          cargo build --locked --release --target x86_64-unknown-linux-musl
           echo "== GNU/glibc =="
           file target/release/mnemo
           ldd target/release/mnemo || true
@@ -106,17 +236,12 @@ jobs:
           file target/x86_64-unknown-linux-musl/release/mnemo
           ldd target/x86_64-unknown-linux-musl/release/mnemo || true
 
-      - name: Shell scripts syntax check
-        run: |
-          bash -n scripts/install.sh
-          bash -n scripts/uninstall.sh
-          bash -n scripts/lib/bashrc.sh
-          bash -n scripts/package-release.sh
-
       # ----- Release versionnée (bump + tag + GitHub Release + artefacts) -----
       # Les binaires définitifs sont (re)construits APRÈS le bump de version par
       # le hook `after:bump` de release-it.json, afin que `mnemo version` reporte
-      # la bonne version. Les archives sont ensuite attachées via le glob d'assets.
+      # la bonne version. Le packaging génère les `.tar.gz` + `.sha256` (glibc et
+      # musl), vérifie chaque checksum (`sha256sum -c`) puis les archives sont
+      # attachées via le glob d'assets de release-it.json.
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"

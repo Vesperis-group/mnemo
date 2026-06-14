@@ -132,3 +132,66 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   dépendance transitive via `ratatui`, signalée `unmaintained` (pas une
   vulnérabilité active). Suivi pour suppression lors d'une mise à jour future
   de Ratatui. Voir `deny.toml`, section `[advisories].ignore`.
+
+## 7. Durcissement CI/CD et chaîne de release
+
+Le pipeline GitHub Actions est conçu pour qu'**aucune release ne soit publiée
+si un seul contrôle critique échoue** :
+
+- **Gating strict.** Le workflow `release.yml` est séquencé en trois jobs :
+  `quality` (fmt, clippy, tests, build glibc + musl) et `audit`
+  (`cargo deny`, `cargo audit`, `gitleaks`) s'exécutent en amont ; le job
+  `publish` déclare `needs: [quality, audit]` et `if: success()`. Si la qualité
+  ou l'audit échoue, la publication n'est jamais atteinte. Aucun job critique
+  n'utilise `continue-on-error`.
+- **Permissions minimales.** Le workflow tourne en `contents: read` par défaut.
+  Seul le job `publish` élève ses droits à `contents: write` et reçoit le token
+  de publication ; les jobs de qualité et d'audit n'y ont jamais accès.
+- **Checksums SHA-256 des assets.** `scripts/package-release.sh` génère pour
+  chaque archive (`glibc` et `musl`) un fichier `.tar.gz.sha256` et le vérifie
+  immédiatement (`sha256sum -c`). Un checksum manquant ou invalide interrompt
+  le packaging et donc la publication. Les `.sha256` sont attachés à la Release
+  aux côtés des archives (cf. `release-it.json`, liste d'assets).
+- **Actions épinglées par SHA.** Toutes les actions tierces (`actions/checkout`,
+  `actions/setup-node`, `Swatinem/rust-cache`) sont référencées par SHA de
+  commit complet, avec le tag lisible en commentaire et la procédure de mise à
+  jour (`git ls-remote`). Cela empêche le déplacement silencieux d'un tag
+  flottant.
+- **Versions de l'outillage figées (pas de canal flottant).**
+  - **Rust** : `rust-toolchain.toml` épingle la version exacte du compilateur
+    (`channel = "1.96.0"`), ses composants (`rustfmt`, `clippy`) et la cible
+    `x86_64-unknown-linux-musl`. Le `rustup` pré-installé sur le runner lit ce
+    fichier ; aucune action tierce n'installe la toolchain. Chaque job affiche
+    `rustc --version` et `rustup show active-toolchain` comme preuve.
+  - **Node.js** : `.node-version` épingle la version (`24.15.0`), consommée par
+    `setup-node` via `node-version-file` (pas de `node-version: 20` ni `latest`).
+  - **Outils d'audit Cargo** : `cargo-audit`, `cargo-deny`, `cargo-machete` sont
+    installés en version exacte (`--version X.Y.Z --locked`) et leurs versions
+    sont affichées en CI.
+- **Runners épinglés.** Les workflows utilisent `ubuntu-24.04` (et
+  `ubuntu-22.04` là où le lien glibc 2.35 de l'asset GNU l'impose) plutôt que
+  `ubuntu-latest`. Ces images GitHub restent maintenues et moins flottantes que
+  `latest`, **mais ne sont pas immuables au digest** : c'est une limite
+  résiduelle assumée (cf. § risques résiduels).
+- **Téléchargements vérifiés.** Le binaire `gitleaks` est épinglé en version et
+  son empreinte SHA-256 est contrôlée avant exécution (pas de `curl | bash`, pas
+  d'installation sans checksum).
+- **Lockfiles obligatoires.** `Cargo.lock` et `package-lock.json` sont
+  versionnés. La CI utilise `cargo fetch --locked` puis `cargo build/test/clippy
+  --locked` (aucune mise à jour implicite de dépendances) et `npm ci`
+  (jamais `npm install`), complété par `npm audit --omit=dev` avant publication.
+- **Publication contrôlée.** La release réelle n'est déclenchée que par un push
+  sur `main` (typiquement un merge de PR), après CI verte. En local,
+  `make release-check` n'exécute que `release-it --dry-run` : aucune publication
+  réelle ne peut partir d'un poste de développement.
+
+### Limites résiduelles de la supply chain CI
+
+- Les runners GitHub hébergés (`ubuntu-24.04`, `ubuntu-22.04`) sont des images
+  **mises à jour en place** : leur contenu évolue sans changement de label et
+  n'est pas épinglé à un digest. On accepte cette confiance dans l'infrastructure
+  GitHub ; un durcissement supplémentaire (runners conteneurisés épinglés par
+  digest) reste possible mais hors périmètre pour un projet mono-utilisateur.
+- Le toolchain Rust est téléchargé par `rustup` via la version épinglée ; on fait
+  confiance à l'infrastructure de distribution officielle de Rust (signée).
+
