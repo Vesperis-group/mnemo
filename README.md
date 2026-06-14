@@ -64,28 +64,7 @@ entièrement sur votre machine.
 Interface TUI « ops dashboard » (`mnemo search`) : barre d'identité, synthèse
 (KPI), liste des commandes et panneau de détails sectionné.
 
-```text
-┌ mnemo ───────────────────────────────────────────────────────────────────────────────────────┐
-│mnemo v0.9.2  ·  projet mnemo  ·  branche main  ·  total 6                                       │
-│Recherche (tapez pour filtrer)▏                                                                  │
-│Filtres [aucun filtre]                                                                           │
-└──────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ Synthèse ────────────────────────────────────────────────────────────────────────────────────┐
-│Total 6   Visibles 6   Succès 4   Échecs 2   Taux d'échec 33.3%   Projets 2   Shell bash         │
-└──────────────────────────────────────────────────────────────────────────────────────────────┘
-┌ Commandes (6) ─────────────────────────────────────────┐┌ Détails ───────────────────────────┐
-│> 17:29  ✓ mnemo          cargo build --release --locked ││COMMAND                              │
-│  17:24  ✓ mnemo          cargo clippy --all-targets --… ││cargo build --release --locked       │
-│  17:20  ✗ mnemo          cargo test --locked            ││statut     SUCCESS                   │
-│  17:18  ✓ mnemo          git push origin feat/tui       ││                                     │
-│  16:58  ✓ infra          docker compose up -d           ││CONTEXT                              │
-│  16:40  ✗ infra          terraform apply                ││cwd        /home/dev/mnemo           │
-└────────────────────────────────────────────────────────┘└─────────────────────────────────────┘
- [Enter] sélection  [Tab] détails  [Ctrl+P/B/D] filtrer  [Ctrl+L] clear  [F1] aide  [Esc] quitter
-```
-
-> Pour une capture d'écran réelle (PNG), voir [docs/assets/README.md](docs/assets/README.md)
-> qui décrit comment la générer ; aucune image binaire n'est versionnée par défaut.
+<video src="docs/assets/mnemo-tui.mp4" controls width="100%"></video>
 
 Mode non interactif (scripts / CI) :
 
