@@ -22,25 +22,48 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# ---------------------------------------------------------------------------
+# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
+# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
+# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
+#
+# Rust figé par rust-toolchain.toml (rustup du runner). Runner ubuntu-24.04.
+# Outils d'audit installés en VERSION EXACTE + `--locked` (pas de version
+# flottante) ; pour mettre à jour, vérifier la dernière version stable sur
+# crates.io puis figer le numéro ci-dessous.
+# ---------------------------------------------------------------------------
+
 jobs:
   supply-chain:
     name: cargo audit / deny / machete
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
 
-      - name: Install audit tools
+      - name: Fetch dependencies (locked)
+        run: cargo fetch --locked
+
+      - name: Install audit tools (versions exactes)
         run: |
-          cargo install cargo-audit --locked || true
-          cargo install cargo-deny --locked || true
-          cargo install cargo-machete --locked || true
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo install cargo-deny --version 0.19.8 --locked
+          cargo install cargo-machete --version 0.9.2 --locked
+
+      - name: Print tool versions
+        run: |
+          cargo audit --version
+          cargo deny --version
+          cargo machete --version
 
       - name: cargo audit (vulnérabilités RustSec)
         run: cargo audit
@@ -53,23 +76,31 @@ jobs:
 
   secrets:
     name: gitleaks (détection de secrets)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       # Le binaire CLI open-source est utilisé directement plutôt que l'action
       # gitleaks/gitleaks-action@v2, qui exige une licence payante sur les
       # dépôts appartenant à une organisation GitHub.
-      - name: Install gitleaks CLI
+      #
+      # Version épinglée + checksum SHA-256 vérifié AVANT installation : aucun
+      # binaire n'est exécuté si l'empreinte ne correspond pas (pas de
+      # `curl | bash`, pas d'installation sans vérification).
+      # Pour mettre à jour : récupérer le SHA depuis
+      #   https://github.com/gitleaks/gitleaks/releases/download/v<ver>/gitleaks_<ver>_checksums.txt
+      - name: Install gitleaks CLI (checksum vérifié)
         run: |
           set -euo pipefail
           GITLEAKS_VERSION="8.27.2"
+          GITLEAKS_SHA256="141c3b2dede46d8b3a53b47116da756bd223decc0374797559a6b50ecba5590c"
           curl -fsSL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
           gitleaks version

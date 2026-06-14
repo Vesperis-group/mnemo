@@ -18,40 +18,58 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# ---------------------------------------------------------------------------
+# Actions épinglées par SHA de commit complet (supply chain). Le tag lisible
+# est rappelé en commentaire. Pour mettre à jour : récupérer le nouveau SHA via
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (pour un tag annoté, utiliser le SHA de la ligne `refs/tags/<tag>^{}`) puis
+# remplacer le hash ET le commentaire de version.
+#
+# La version exacte de Rust est figée par rust-toolchain.toml et installée par
+# le rustup pré-présent sur le runner (pas de canal flottant « stable », pas
+# d'action tierce pour la toolchain). Runner épinglé sur ubuntu-24.04 (image
+# GitHub maintenue, moins flottante que « ubuntu-latest » — mais pas immuable
+# au digest, cf. docs/THREAT_MODEL.md).
+# ---------------------------------------------------------------------------
+
 jobs:
   rust:
     name: Rust (fmt, clippy, test, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - name: Install Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Fetch dependencies (locked)
+        run: cargo fetch --locked
 
       - name: Format check
         run: cargo fmt --all -- --check
 
       - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Tests
-        run: cargo test
+        run: cargo test --locked
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --locked --release
 
   scripts:
     name: Shell scripts (bash -n)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Syntax check
         run: |
