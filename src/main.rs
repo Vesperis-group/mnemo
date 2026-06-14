@@ -69,6 +69,13 @@ fn run() -> Result<()> {
             project,
             branch,
         } => cmd_search(query.or(query_opt), print, limit, project, branch),
+        Command::Tui {
+            query,
+            project,
+            branch,
+            cwd,
+            failed,
+        } => cmd_tui(query, project, branch, cwd, failed),
         Command::Bashrc => {
             print!("{}", shell::bashrc_snippet());
             Ok(())
@@ -237,7 +244,58 @@ fn cmd_search(
         return Ok(());
     }
 
-    if let Some(selected) = tui::run(records, query.unwrap_or_default())? {
+    // Sinon : même moteur TUI que `mnemo tui`, avec les filtres CLI pré-remplis.
+    let seed = tui::app::TuiFilters {
+        project: filter.project.clone(),
+        branch: filter.branch.clone(),
+        ..Default::default()
+    };
+    if let Some(selected) =
+        tui::run_interactive(records, seed, query.unwrap_or_default(), cfg.search_limit)?
+    {
+        println!("{selected}");
+    }
+    Ok(())
+}
+
+/// Sous-commande `mnemo tui` : interface interactive principale.
+fn cmd_tui(
+    query: Option<String>,
+    project: Option<String>,
+    branch: Option<String>,
+    cwd: Option<String>,
+    failed: bool,
+) -> Result<()> {
+    // Base absente : proposer `mnemo init` plutôt que de la créer en silence.
+    let db_path = config::db_path()?;
+    if !db_path.exists() {
+        eprintln!("Base de données absente. Lancez `mnemo init` puis `mnemo import`.");
+        return Ok(());
+    }
+
+    let cfg = config::Config::load()?;
+    let records = {
+        let conn = db::open(&db_path)?;
+        db::fetch_filtered(&conn, &db::SearchFilter::default(), cfg.search_limit)?
+    };
+
+    let filters = tui::app::TuiFilters {
+        project,
+        branch,
+        cwd,
+        status: if failed {
+            tui::app::StatusFilter::Failure
+        } else {
+            tui::app::StatusFilter::All
+        },
+    };
+
+    if let Some(selected) = tui::run_interactive(
+        records,
+        filters,
+        query.unwrap_or_default(),
+        cfg.search_limit,
+    )? {
         println!("{selected}");
     }
     Ok(())

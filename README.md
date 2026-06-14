@@ -224,7 +224,8 @@ make uninstall
 | `mnemo init` | Crée `~/.config/mnemo/config.toml`, `~/.local/share/mnemo/history.db` et affiche le snippet `.bashrc`. |
 | `mnemo import [--file <chemin>]` | Importe `~/.bash_history` (ou un fichier donné) dans SQLite. |
 | `mnemo add --cmd "<cmd>" [--cwd "<dir>"] [--exit-code <n>]` | Ajoute une commande dans la base. |
-| `mnemo search [requête]` | Ouvre la TUI interactive ; la commande choisie est imprimée sur stdout. |
+| `mnemo tui [requête] [--project <nom>] [--branch <branche>] [--cwd <chemin>] [--failed]` | Ouvre la **TUI avancée** (recherche, filtres, détails, suppression). |
+| `mnemo search [requête]` | Ouvre la même TUI interactive ; la commande choisie est imprimée sur stdout. |
 | `mnemo search <requête> --print [--limit N]` | **Mode non interactif** : imprime les résultats sur stdout, sans TUI. |
 | `mnemo search --query <requête> --print` | Variante avec option explicite `--query`. |
 | `mnemo search <requête> [--project <nom>] [--branch <branche>]` | Filtre par contexte Git (projet / branche), compatible avec `--print` et la TUI. |
@@ -242,6 +243,84 @@ make uninstall
 | `mnemo version` | Affiche la version, la cible (OS/arch), le profil de build et le chemin du binaire. |
 
 Le mode `--print` garde le comportement TUI **par défaut** (sans `--print`).
+
+## TUI avancée
+
+`mnemo tui` est l'interface interactive principale. `mnemo search` (sans
+`--print`) utilise le même moteur ; `mnemo search --print` reste un mode
+non interactif inchangé.
+
+```bash
+mnemo tui                        # toutes les commandes
+mnemo tui cargo                  # requête initiale
+mnemo tui --project mnemo        # filtre projet initial
+mnemo tui --branch main          # filtre branche initial
+mnemo tui --cwd /home/killian/mnemo
+mnemo tui --failed               # uniquement les commandes en échec
+```
+
+### Trois zones
+
+- **Haut** : barre de recherche (frappe en direct) + filtres actifs.
+- **Gauche** : liste des commandes (date, statut `✓`/`✗`, commande).
+- **Droite** : détails de la sélection (`id`, `command`, `cwd`, `shell`,
+  `hostname`, `exit_code`, `created_at`, `git_root`, `git_branch`,
+  `git_remote`, `session_id`).
+
+### Deux contextes de saisie
+
+- **Search** (par défaut) : la frappe édite la requête (recherche fuzzy en
+  direct).
+- **Details** : focus liste, raccourcis d'une lettre actifs (`j`/`k`, `d`,
+  `r`, `f`, `c`, `?`, `q`).
+
+`Tab` bascule entre les deux. `Esc` quitte partout. `F1` ouvre l'aide partout.
+
+### Raccourcis
+
+| Touche | Action |
+| --- | --- |
+| `↑` / `k`, `↓` / `j` | élément précédent / suivant |
+| `PageUp` / `PageDown` | page précédente / suivante |
+| `Home` / `End` | premier / dernier élément |
+| `Entrée` | imprime la commande sélectionnée puis quitte |
+| `Esc` / `q` | quitter |
+| `Tab` | basculer le focus liste/détails |
+| `r` | rafraîchir (recharge la base) |
+| `c` | copier la commande (presse-papiers système si dispo, sinon tampon interne) |
+| `?` / `F1` | afficher/masquer l'aide |
+| `d` | supprimer la commande sélectionnée |
+| `y` / `n` (`Esc`) | confirmer / annuler la suppression |
+| `f` | ouvrir/fermer le panneau de filtres |
+| `Ctrl+P` / `Ctrl+B` / `Ctrl+D` | filtrer par projet / branche / dossier de la sélection |
+| `Ctrl+L` | effacer tous les filtres |
+| `Ctrl+C` | quitter (dans tous les modes) |
+
+Dans le panneau de filtres (`f`) : `p`/`b`/`w` (projet/branche/dossier depuis la
+sélection), `s` (statut : tous → succès → échecs), `c` (effacer).
+
+> **Note :** `Ctrl+C` quitte toujours l'application, quel que soit le mode.
+> Le filtre « par répertoire de la sélection » est sur `Ctrl+D`.
+
+### Copie (`c`) sans dépendance graphique
+
+La copie tente, dans l'ordre, `wl-copy`, `xclip`, puis `xsel`. Si aucun n'est
+disponible (WSL minimal, headless…), un message l'indique et la commande reste
+récupérable via `Entrée`. Aucune bibliothèque de presse-papiers n'est liée au
+binaire.
+
+### Suppression sûre
+
+`d` ouvre une confirmation : `Supprimer la commande #N ? Cette action créera
+d'abord une sauvegarde.` Sur `y`, mnemo crée une **sauvegarde automatique**
+(comme `mnemo delete`), supprime dans une transaction SQLite, retire l'entrée de
+la liste et affiche un message de succès. **Si la sauvegarde échoue, rien n'est
+supprimé.** `n` ou `Esc` annule.
+
+### États gérés
+
+Base absente (propose `mnemo init`), base vide, recherche/filtre sans résultat,
+erreur SQLite (message propre), terminal trop petit (avertissement).
 
 ### Contexte Git et statistiques
 

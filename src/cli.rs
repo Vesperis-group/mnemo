@@ -61,6 +61,24 @@ pub enum Command {
         branch: Option<String>,
     },
 
+    /// Ouvre la TUI avancée (interface interactive principale).
+    Tui {
+        /// Requête initiale (positionnelle, optionnelle).
+        query: Option<String>,
+        /// Filtre initial sur un projet Git (nom du dossier racine).
+        #[arg(long, value_name = "NOM")]
+        project: Option<String>,
+        /// Filtre initial sur une branche Git.
+        #[arg(long, value_name = "BRANCHE")]
+        branch: Option<String>,
+        /// Filtre initial sur un répertoire de travail.
+        #[arg(long, value_name = "CHEMIN")]
+        cwd: Option<String>,
+        /// N'affiche que les commandes en échec (exit_code ≠ 0).
+        #[arg(long)]
+        failed: bool,
+    },
+
     /// Affiche le snippet d'intégration Bash à ajouter dans ~/.bashrc.
     Bashrc,
 
