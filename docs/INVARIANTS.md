@@ -209,3 +209,28 @@ adossé à des tests automatisés (référencés entre parenthèses).
     Quel que soit le mode (recherche, détails, filtres, confirmation),
     `Ctrl+C` quitte l'application.
     (`src/tui/events.rs::tests::ctrl_c_quitte_dans_tous_les_modes`)
+
+## Permissions locales (v0.9.1)
+
+30. **Les fichiers sensibles ne sont pas lisibles par les autres utilisateurs.**
+    Sous Unix, la config (`config.toml`), la base (`history.db`) et les
+    archives de sauvegarde (`*.tar.gz`) sont créées en `600` (lecture/écriture
+    propriétaire uniquement) ; les dossiers gérés par mnemo (`~/.config/mnemo`,
+    `~/.local/share/mnemo`, `…/backups`) sont resserrés à `700`. Le durcissement
+    est centralisé (`config::harden_file` / `config::harden_dir`) et appliqué à
+    la création (`Config::save`, `db::open`, `backup::create_backup`) ainsi qu'à
+    `mnemo init` (idempotent). Sur les plateformes non-Unix, l'opération est un
+    no-op et ne provoque jamais d'erreur.
+    (`tests/doctor.rs::{init_cree_config_et_db_en_600,
+    doctor_permissions_600_sont_correctes}`,
+    `tests/v3_data_management.rs::backup_cree_une_archive_en_600`)
+
+31. **`doctor` détecte et corrige les permissions trop ouvertes.**
+    `mnemo doctor` signale en `WARN` toute config ou base plus ouverte que `600`
+    (`Permissions trop ouvertes : … (actuel 644, attendu 600)`) sans la
+    modifier. `mnemo doctor --fix` applique `chmod 600` (`[FIX]
+    Permissions corrigées : … → 600`) sans jamais altérer le contenu des
+    fichiers.
+    (`tests/doctor.rs::{doctor_signale_config_trop_ouverte,
+    doctor_signale_db_trop_ouverte, doctor_fix_resserre_config_a_600,
+    doctor_fix_resserre_db_a_600}`)

@@ -20,6 +20,8 @@ pub enum Status {
     Warn,
     Error,
     Info,
+    /// Correction appliquée par `--fix` (non bloquante, distincte d'un simple OK).
+    Fix,
 }
 
 impl Status {
@@ -29,6 +31,7 @@ impl Status {
             Status::Warn => "WARN",
             Status::Error => "ERROR",
             Status::Info => "INFO",
+            Status::Fix => "FIX",
         }
     }
 }
@@ -118,6 +121,7 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
                 continue;
             }
             std::fs::create_dir_all(&dir)?;
+            config::harden_dir(&dir);
             fixes += 1;
             report.push(
                 name,
@@ -252,8 +256,8 @@ fn fix_permissions(report: &mut Report, name: &str, path: &Path) -> usize {
         }
         report.push(
             name,
-            Status::Ok,
-            format!("Permissions resserrées à 600 : {}", path.display()),
+            Status::Fix,
+            format!("Permissions corrigées : {} → 600", path.display()),
         );
         1
     }
@@ -557,12 +561,12 @@ fn check_permissions(report: &mut Report, name: &str, path: &Path) {
         match std::fs::metadata(path) {
             Ok(meta) => {
                 let mode = meta.permissions().mode() & 0o777;
-                if mode & 0o022 != 0 {
+                if mode & 0o077 != 0 {
                     report.push(
                         name,
                         Status::Warn,
                         format!(
-                            "{} est modifiable par le groupe/les autres ({:o})",
+                            "Permissions trop ouvertes : {} (actuel {:o}, attendu 600)",
                             path.display(),
                             mode
                         ),
@@ -640,11 +644,12 @@ fn render_text(report: &Report) {
     }
     println!("------------------------------------");
     println!(
-        "Résumé : {} OK, {} WARN, {} ERROR, {} INFO",
+        "Résumé : {} OK, {} WARN, {} ERROR, {} INFO, {} FIX",
         report.count(Status::Ok),
         report.count(Status::Warn),
         report.count(Status::Error),
         report.count(Status::Info),
+        report.count(Status::Fix),
     );
     if report.exit_code() == 0 {
         println!("État global : sain (code 0)");
@@ -660,6 +665,7 @@ fn render_json(report: &Report) -> String {
         warn: usize,
         error: usize,
         info: usize,
+        fix: usize,
         exit_code: i32,
     }
     #[derive(Serialize)]
@@ -674,6 +680,7 @@ fn render_json(report: &Report) -> String {
             warn: report.count(Status::Warn),
             error: report.count(Status::Error),
             info: report.count(Status::Info),
+            fix: report.count(Status::Fix),
             exit_code: report.exit_code(),
         },
         checks: &report.checks,

@@ -852,11 +852,13 @@ mnemo doctor --json   # sortie JSON exploitable (scripts / CI)
 - Présence de `~/.bashrc`, du bloc mnemo (non dupliqué) et du bind `Ctrl+R`.
 - Shell courant (`$SHELL`) - avertissement si ce n'est pas Bash.
 - `HISTTIMEFORMAT` - information si non configuré.
-- Permissions simples de la config et de la base.
+- Permissions des fichiers sensibles : la config, la base et les sauvegardes
+  doivent être privées (`600`). Toute permission plus ouverte (`644`, `664`…)
+  est signalée en `WARN`.
 
 ### Statuts et code retour
 
-Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]` ou `[INFO]`.
+Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]`, `[INFO]` ou `[FIX]`.
 
 | Code retour | Signification |
 | --- | --- |
@@ -870,8 +872,8 @@ Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]` ou `[INFO]`.
 - crée les dossiers de configuration / données s'ils sont absents ;
 - crée la config si absente ;
 - crée la base si absente ;
-- resserre les permissions trop permissives de la config et de la base
-  (`chmod 600`) ;
+- resserre les permissions trop ouvertes de la config et de la base à `600`
+  (lecture/écriture propriétaire uniquement, `[FIX]`) ;
 - ajoute le bloc mnemo au `.bashrc` si absent, **supprime les doublons** et
   **restaure le raccourci `Ctrl+R`** s'il a disparu (**toujours avec
   sauvegarde** du `.bashrc` avant modification) ;
@@ -890,7 +892,7 @@ mnemo doctor - rapport de diagnostic
 [ OK  ] Binaire trouvé dans le PATH : ~/.local/bin/mnemo
 [ OK  ] ~/.local/bin est dans le PATH
 [ OK  ] Configuration présente : ~/.config/mnemo/config.toml
-[ OK  ] Permissions correctes (644)
+[ OK  ] Permissions correctes (600)
 [ OK  ] Base présente : ~/.local/share/mnemo/history.db
 [ OK  ] Table `commands` présente
 [INFO ] 128 commande(s) enregistrée(s)
@@ -901,7 +903,7 @@ mnemo doctor - rapport de diagnostic
 [ OK  ] Shell courant : /bin/bash
 [INFO ] HISTTIMEFORMAT non configuré : les horodatages d'import seront approximatifs
 ------------------------------------
-Résumé : 11 OK, 0 WARN, 0 ERROR, 2 INFO
+Résumé : 11 OK, 0 WARN, 0 ERROR, 2 INFO, 0 FIX
 État global : sain (code 0)
 ```
 
@@ -909,7 +911,7 @@ Sortie JSON (`--json`) :
 
 ```json
 {
-  "summary": { "ok": 11, "warn": 0, "error": 0, "info": 2, "exit_code": 0 },
+  "summary": { "ok": 11, "warn": 0, "error": 0, "info": 2, "fix": 0, "exit_code": 0 },
   "checks": [
     { "name": "binary.version", "status": "info", "message": "mnemo version 0.1.0" },
     { "name": "db.table", "status": "ok", "message": "Table `commands` présente" }
@@ -1109,9 +1111,11 @@ search_limit = 5000
   modification (`~/.bashrc.mnemo.bak.YYYYMMDD-HHMMSS`) et ne suppriment jamais
   les données sans confirmation. La restauration crée une sauvegarde de sûreté
   avant de remplacer la base.
-- **Permissions.** La base reste dans votre répertoire utilisateur. Pensez à la
-  protéger si votre historique contient des informations sensibles
-  (`chmod 600 ~/.local/share/mnemo/history.db`).
+- **Permissions.** La config, la base et les sauvegardes restent dans votre
+  répertoire utilisateur et sont créées en `600` (lecture/écriture
+  propriétaire uniquement) sous Unix ; les dossiers gérés par mnemo sont en
+  `700`. `mnemo doctor` signale toute permission trop ouverte et
+  `mnemo doctor --fix` la resserre automatiquement à `600`.
 
 > ℹ️ Le filtrage par mots-clés est une protection « best-effort », pas une
 > garantie absolue. Vérifiez votre historique si vous manipulez des secrets.

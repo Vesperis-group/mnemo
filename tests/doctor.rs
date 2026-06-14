@@ -143,3 +143,116 @@ fn doctor_json_est_valide() {
         assert!(c["message"].is_string());
     }
 }
+
+#[cfg(unix)]
+fn mode_of(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+#[cfg(unix)]
+fn chmod(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(mode);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_permissions_600_sont_correctes() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let config = home.join(".config/mnemo/config.toml");
+    let db = home.join(".local/share/mnemo/history.db");
+    chmod(&config, 0o600);
+    chmod(&db, 0o600);
+
+    let out = run(home, &["doctor"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Permissions correctes (600)"));
+    assert!(!stdout.contains("Permissions trop ouvertes"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_signale_config_trop_ouverte() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let config = home.join(".config/mnemo/config.toml");
+    chmod(&config, 0o644);
+
+    let out = run(home, &["doctor"]);
+    // Permissions trop ouvertes = WARN, pas une erreur bloquante.
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Permissions trop ouvertes"));
+    assert!(stdout.contains("actuel 644, attendu 600"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_signale_db_trop_ouverte() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let db = home.join(".local/share/mnemo/history.db");
+    chmod(&db, 0o644);
+
+    let out = run(home, &["doctor"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Permissions trop ouvertes"));
+    assert!(stdout.contains("history.db"));
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_fix_resserre_config_a_600() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let config = home.join(".config/mnemo/config.toml");
+    chmod(&config, 0o644);
+
+    let out = run(home, &["doctor", "--fix"]);
+    assert_eq!(out.status.code(), Some(0));
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(stdout.contains("Permissions corrigées"));
+    assert!(stdout.contains("→ 600"));
+    assert_eq!(mode_of(&config), 0o600);
+}
+
+#[cfg(unix)]
+#[test]
+fn doctor_fix_resserre_db_a_600() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let db = home.join(".local/share/mnemo/history.db");
+    chmod(&db, 0o644);
+
+    assert!(run(home, &["doctor", "--fix"]).status.success());
+    assert_eq!(mode_of(&db), 0o600);
+}
+
+#[cfg(unix)]
+#[test]
+fn init_cree_config_et_db_en_600() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    assert!(run(home, &["init"]).status.success());
+
+    let config = home.join(".config/mnemo/config.toml");
+    let db = home.join(".local/share/mnemo/history.db");
+    assert_eq!(mode_of(&config), 0o600);
+    assert_eq!(mode_of(&db), 0o600);
+}

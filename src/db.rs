@@ -173,10 +173,13 @@ pub fn open(path: &Path) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("création du dossier {}", parent.display()))?;
+        crate::config::harden_dir(parent);
     }
     let conn = Connection::open(path)
         .with_context(|| format!("ouverture de la base {}", path.display()))?;
     migrations::apply(&conn)?;
+    // La base contient l'historique shell : permissions privées.
+    crate::config::harden_file(path);
     Ok(conn)
 }
 
@@ -186,10 +189,12 @@ pub fn open_and_migrate(path: &Path) -> Result<(Connection, migrations::Outcome)
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("création du dossier {}", parent.display()))?;
+        crate::config::harden_dir(parent);
     }
     let conn = Connection::open(path)
         .with_context(|| format!("ouverture de la base {}", path.display()))?;
     let outcome = migrations::apply(&conn)?;
+    crate::config::harden_file(path);
     Ok((conn, outcome))
 }
 
