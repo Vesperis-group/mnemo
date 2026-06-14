@@ -277,10 +277,20 @@ adossé à des tests automatisés (référencés entre parenthèses).
 
 35. **La synthèse (KPI) reflète fidèlement les commandes visibles.**
     Total, visibles, succès, échecs, taux d'échec, projets distincts et shell
-    dominant sont calculés de façon déterministe ; succès et échecs portent sur
-    les commandes **visibles** (après filtres), le total sur l'ensemble chargé.
-    Le taux d'échec vaut `0.0` en l'absence de commande exécutée visible.
+    dominant sont calculés de façon déterministe. `total` porte sur l'ensemble
+    chargé ; **tous les autres indicateurs portent sur les commandes visibles**
+    (après recherche et filtres). Un échec est une commande au `exit_code`
+    présent et ≠ 0 ; tout le reste compte comme succès, de sorte que
+    `succès + échecs == visibles`. Le taux d'échec vaut `échecs / visibles`
+    (en %), ou `0.0` si aucune commande n'est visible.
     (`src/tui/app.rs::tests::{overview_compte_succes_echecs_projets_et_shell,
     overview_taux_echec_nul_sans_commande_executee,
-    overview_suit_les_filtres_visibles}`)
+    overview_suit_les_filtres_visibles,
+    overview_taux_echec_huit_succes_deux_echecs,
+    overview_toutes_en_echec_donne_100_pour_cent,
+    overview_toutes_en_succes_donne_0_pour_cent,
+    overview_exit_inconnu_compte_comme_succes,
+    overview_projets_et_shell_sur_visibles_seulement,
+    overview_sans_shell_ni_projet_ne_panique_pas}`,
+    `src/tui/ui.rs::tests::rendu_synthese_affiche_les_libelles_kpi`)
 

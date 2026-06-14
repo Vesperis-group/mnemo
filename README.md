@@ -438,7 +438,10 @@ mnemo tui --failed               # uniquement les commandes en échec
   actifs (`[projet: …]`, `[branche: …]`, `[statut: échecs]`, `[dossier: …]` ou
   `[aucun filtre]`).
 - **Synthèse / KPI** : `Total`, `Visibles`, `Succès`, `Échecs`, `Taux d'échec`,
-  `Projets` et shell dominant (masquée sur terminal court).
+  `Projets` et shell dominant (masquée sur terminal court). Hormis `Total`
+  (ensemble chargé), tous les indicateurs portent sur les commandes **visibles**
+  après filtres ; un échec est un `exit_code` ≠ 0 et le taux vaut
+  `Échecs / Visibles`.
 - **Corps** : liste des commandes (heure, statut `✓`/`✗`, contexte projet/dossier,
   commande tronquée) à gauche ; détails de la sélection à droite, organisés en
   sections **COMMAND / CONTEXT / EXECUTION / GIT / METADATA** (masqué sur
