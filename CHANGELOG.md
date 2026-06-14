@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.3.0](https://github.com/Vesperis-group/mnemo/compare/v0.2.2...v0.3.0) (2026-06-14)
+
+### Features
+
+* ajoute la gestion et sauvegarde des données ([73d7ee4](https://github.com/Vesperis-group/mnemo/commit/73d7ee432a844462f227883e8058af6513e7de2f))
+
 ## [0.2.2](https://github.com/Vesperis-group/mnemo/compare/v0.2.1...v0.2.2) (2026-06-14)
 
 ### Bug Fixes
