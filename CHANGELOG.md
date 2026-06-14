@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.3.1](https://github.com/Vesperis-group/mnemo/compare/v0.3.0...v0.3.1) (2026-06-14)
+
+### Bug Fixes
+
+* ignore broken pipe on piped output ([d279135](https://github.com/Vesperis-group/mnemo/commit/d27913572c65ebfded42780abea8a4e7d26b110f))
+
 ## [0.3.0](https://github.com/Vesperis-group/mnemo/compare/v0.2.2...v0.3.0) (2026-06-14)
 
 ### Features
