@@ -1,5 +1,23 @@
+//! Interface TUI de mnemo.
+//!
+//! Le module racine gère le terminal et la boucle d'événements ; la logique est
+//! répartie dans des sous-modules testables :
+//! - [`app`] : modèle et logique métier (navigation, filtres, suppression) ;
+//! - [`events`] : mapping clavier -> action ;
+//! - [`actions`] : énumération des actions et accès base isolé ;
+//! - [`ui`] : rendu Ratatui ;
+//! - [`help`] : texte d'aide ;
+//! - [`clipboard`] : copie système optionnelle.
+
+pub mod actions;
+pub mod app;
+pub mod clipboard;
+pub mod events;
+pub mod help;
+pub mod ui;
+
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -7,22 +25,33 @@ use crossterm::terminal::{
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config as NucleoConfig, Matcher, Utf32Str};
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::{Frame, Terminal};
 use std::fs::{File, OpenOptions};
 
 use crate::db::CommandRecord;
+use actions::{DbBackend, TuiBackend};
+use app::{TuiApp, TuiFilters};
 
-/// Lance la TUI de recherche. Retourne la commande sélectionnée (Entrée),
-/// ou `None` si l'utilisateur a quitté (Esc / Ctrl+C).
-pub fn run(records: Vec<CommandRecord>, initial_query: String) -> Result<Option<String>> {
+/// Lance la TUI avancée. Retourne la commande sélectionnée (Entrée), ou `None`
+/// si l'utilisateur a quitté.
+///
+/// `limit` borne le rechargement (`r`). `backend` est injecté pour rester
+/// testable, mais l'appelant utilise normalement [`DbBackend`].
+pub fn run_interactive(
+    records: Vec<CommandRecord>,
+    filters: TuiFilters,
+    initial_query: String,
+    limit: usize,
+) -> Result<Option<String>> {
+    let mut backend = DbBackend::open(limit)?;
+    let mut app = TuiApp::new(records, filters, initial_query);
+
     let mut terminal = setup_terminal()?;
-    let result = run_app(&mut terminal, records, initial_query);
+    let result = event_loop(&mut terminal, &mut app, &mut backend);
     restore_terminal(&mut terminal)?;
-    result
+    result?;
+
+    Ok(app.outcome.clone())
 }
 
 /// On rend l'interface sur `/dev/tty` (et non stdout) afin que `mnemo search`
@@ -42,182 +71,29 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<File>>) -> Result<(
     Ok(())
 }
 
-struct App {
-    records: Vec<CommandRecord>,
-    query: String,
-    filtered: Vec<usize>,
-    state: ListState,
-    matcher: Matcher,
-}
-
-impl App {
-    fn new(records: Vec<CommandRecord>, query: String) -> Self {
-        Self {
-            records,
-            query,
-            filtered: Vec::new(),
-            state: ListState::default(),
-            matcher: Matcher::new(NucleoConfig::DEFAULT),
-        }
-    }
-
-    /// Recalcule la liste filtrée à partir de la requête courante.
-    fn recompute(&mut self) {
-        self.filtered = fuzzy_filter(&self.records, &self.query, &mut self.matcher);
-
-        if self.filtered.is_empty() {
-            self.state.select(None);
-        } else {
-            let sel = self
-                .state
-                .selected()
-                .unwrap_or(0)
-                .min(self.filtered.len() - 1);
-            self.state.select(Some(sel));
-        }
-    }
-
-    fn next(&mut self) {
-        if self.filtered.is_empty() {
-            return;
-        }
-        let i = match self.state.selected() {
-            Some(i) if i + 1 < self.filtered.len() => i + 1,
-            Some(i) => i,
-            None => 0,
-        };
-        self.state.select(Some(i));
-    }
-
-    fn previous(&mut self) {
-        if self.filtered.is_empty() {
-            return;
-        }
-        let i = match self.state.selected() {
-            Some(0) | None => 0,
-            Some(i) => i - 1,
-        };
-        self.state.select(Some(i));
-    }
-
-    fn selected_command(&self) -> Option<String> {
-        self.state
-            .selected()
-            .and_then(|i| self.filtered.get(i))
-            .map(|&idx| self.records[idx].command.clone())
-    }
-}
-
-fn run_app(
+fn event_loop<B: TuiBackend>(
     terminal: &mut Terminal<CrosstermBackend<File>>,
-    records: Vec<CommandRecord>,
-    initial_query: String,
-) -> Result<Option<String>> {
-    let mut app = App::new(records, initial_query);
-    app.recompute();
-
+    app: &mut TuiApp,
+    backend: &mut B,
+) -> Result<()> {
     loop {
-        terminal.draw(|f| ui(f, &mut app))?;
+        terminal.draw(|f: &mut Frame| ui::render(f, app))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
                 continue;
             }
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('c'), KeyModifiers::CONTROL) => return Ok(None),
-                (KeyCode::Esc, _) => return Ok(None),
-                (KeyCode::Enter, _) => return Ok(app.selected_command()),
-                (KeyCode::Up, _) => app.previous(),
-                (KeyCode::Down, _) => app.next(),
-                (KeyCode::Backspace, _) => {
-                    app.query.pop();
-                    app.recompute();
-                }
-                (KeyCode::Char(c), m) if !m.contains(KeyModifiers::CONTROL) => {
-                    app.query.push(c);
-                    app.recompute();
-                }
-                _ => {}
+            let action = events::map_key(app.mode, key.code, key.modifiers);
+            app.dispatch(action, backend);
+            if app.should_quit {
+                break;
             }
         }
     }
+    Ok(())
 }
 
-fn ui(f: &mut Frame, app: &mut App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(1),
-            Constraint::Length(1),
-        ])
-        .split(f.area());
-
-    // Barre de recherche.
-    let search = Paragraph::new(app.query.as_str()).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" mnemo — recherche "),
-    );
-    f.render_widget(search, chunks[0]);
-
-    // Liste filtrée.
-    let items: Vec<ListItem> = app
-        .filtered
-        .iter()
-        .map(|&idx| {
-            let r = &app.records[idx];
-            let date = short_date(&r.created_at);
-            let cwd = shorten_cwd(r.cwd.as_deref().unwrap_or(""));
-            let line = Line::from(vec![
-                Span::styled(format!("{date}  "), Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("{cwd}  "), Style::default().fg(Color::Blue)),
-                Span::raw(r.command.clone()),
-            ]);
-            ListItem::new(line)
-        })
-        .collect();
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(format!(" {} résultat(s) ", app.filtered.len())),
-        )
-        .highlight_style(
-            Style::default()
-                .add_modifier(Modifier::REVERSED)
-                .fg(Color::Yellow),
-        )
-        .highlight_symbol("> ");
-    f.render_stateful_widget(list, chunks[1], &mut app.state);
-
-    // Aide.
-    let help = Paragraph::new("↑/↓ naviguer   Entrée sélectionner   Esc/Ctrl+C quitter")
-        .style(Style::default().fg(Color::DarkGray));
-    f.render_widget(help, chunks[2]);
-}
-
-/// Tronque l'horodatage `YYYY-MM-DD HH:MM:SS` à la minute.
-fn short_date(ts: &str) -> &str {
-    ts.get(0..16).unwrap_or(ts)
-}
-
-/// Remplace le répertoire personnel par `~` pour un affichage plus court.
-fn shorten_cwd(cwd: &str) -> String {
-    if cwd.is_empty() {
-        return String::new();
-    }
-    if let Some(home) = dirs::home_dir() {
-        let home = home.display().to_string();
-        if let Some(rest) = cwd.strip_prefix(&home) {
-            return format!("~{rest}");
-        }
-    }
-    cwd.to_string()
-}
-
-/// Filtre fuzzy partagé entre la TUI et le mode `--print`.
+/// Filtre fuzzy partagé avec le mode `--print`.
 ///
 /// Retourne les indices des `records` correspondant à `query`, triés par score
 /// décroissant. Une requête vide renvoie tous les indices dans l'ordre reçu.
@@ -235,7 +111,6 @@ pub fn fuzzy_filter(records: &[CommandRecord], query: &str, matcher: &mut Matche
             pattern.score(haystack, matcher).map(|score| (i, score))
         })
         .collect();
-    // Score décroissant ; à score égal, on conserve l'ordre récent d'origine.
     scored.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
     scored.into_iter().map(|(i, _)| i).collect()
 }
