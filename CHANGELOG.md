@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.2.0](https://github.com/Vesperis-group/mnemo/compare/v0.1.2...v0.2.0) (2026-06-14)
+
+### Features
+
+* migrations SQLite, contexte Git et commande stats ([d64074e](https://github.com/Vesperis-group/mnemo/commit/d64074e5f155f33df16d7c6eff7108ca2eaadc88))
+
 ## [0.1.2](https://github.com/Vesperis-group/mnemo/compare/v0.1.1...v0.1.2) (2026-06-13)
 
 ## 0.1.1 (2026-06-13)
