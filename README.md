@@ -1,4 +1,4 @@
-# mnemo
+# Mnemo
 
 [![CI](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/ci.yml)
 [![Audit](https://github.com/Vesperis-group/mnemo/actions/workflows/audit.yml/badge.svg)](https://github.com/Vesperis-group/mnemo/actions/workflows/audit.yml)
@@ -7,7 +7,11 @@
 [![Rust 1.96](https://img.shields.io/badge/rust-1.96.0-orange.svg)](rust-toolchain.toml)
 [![Supply chain](https://img.shields.io/badge/supply%20chain-SHA--256%20%2B%20cosign%20%2B%20SBOM-success.svg)](#sécurité--confidentialité)
 
-> Dépôt officiel : <https://github.com/Vesperis-group/mnemo>
+<video src="docs/assets/mnemo-tui.mp4" controls width="100%"></video>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
+```
 
 **Assistant d'historique shell local-first** : recherche fuzzy, contexte projet
 (Git), interface TUI, sauvegardes, maintenance et releases vérifiables. Un seul
