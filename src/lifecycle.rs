@@ -7,6 +7,7 @@
 //! - [`github`] : interrogation de l'API GitHub Releases ;
 //! - [`update`] : « y a-t-il une nouvelle version ? » (aucune installation) ;
 //! - [`upgrade`] : téléchargement + vérification + remplacement du binaire ;
+//! - [`signature`] : vérification optionnelle des signatures Sigstore (cosign) ;
 //! - [`uninstall`] : retrait du binaire / bloc `.bashrc`, purge optionnelle.
 //!
 //! Sécurité : HTTPS par défaut, SHA-256 obligatoire avant toute extraction,
@@ -15,6 +16,7 @@
 //! `uninstall --purge` après confirmation et sauvegarde.
 
 pub mod github;
+pub mod signature;
 pub mod uninstall;
 pub mod update;
 pub mod upgrade;

@@ -19,16 +19,23 @@ use crate::{backup, config, confirm};
 use super::github::{asset_url, fetch_latest_release, http_get_bytes, http_get_string};
 use super::uninstall::bin_path;
 use super::{
-    asset_names_for_version, current_version, normalize_tag, parse_sha256_file, target_triple,
-    update_available, verify_sha256,
+    asset_names_for_version, current_version, normalize_tag, parse_sha256_file, signature,
+    target_triple, update_available, verify_sha256,
 };
 
 /// Point d'entrée de la commande.
+///
+/// `require_signature` rend la vérification Sigstore **obligatoire** : `cosign`
+/// doit être disponible, le bundle de signature téléchargeable et la
+/// vérification valide, sinon l'upgrade est refusé. Sans ce drapeau, la
+/// vérification reste best-effort (avertissement si `cosign` est absent, le
+/// SHA-256 obligatoire demeurant le contrôle bloquant).
 pub fn run(
     dry_run: bool,
     assume_yes: bool,
     version: Option<String>,
     target: Option<String>,
+    require_signature: bool,
 ) -> Result<()> {
     let current = current_version();
     let target_triple = target.unwrap_or_else(|| target_triple().to_string());
@@ -88,14 +95,20 @@ pub fn run(
     }
     println!("Intégrité SHA-256 vérifiée ✓");
 
-    // Note (v0.7) : la release publie aussi une signature cosign et une
-    // attestation de provenance SLSA par artefact. Leur vérification reste
-    // MANUELLE (cf. README, « Vérifier l'intégrité d'une release »).
-    // TODO v0.8 : vérification cosign optionnelle ici, sans affaiblir le
-    // contrôle SHA-256 ci-dessus (qui demeure obligatoire et bloquant).
-
-    // 6. Extraction dans un dossier temporaire.
+    // 5 bis. Vérification Sigstore (défense en profondeur). Le SHA-256 ci-dessus
+    // reste l'unique contrôle obligatoire ; cette étape ne s'exécute qu'après
+    // lui. En mode strict (`require_signature`), toute impossibilité de vérifier
+    // refuse l'installation ; sinon, elle est best-effort.
     let tmp = tempdir()?;
+    enforce_signature(
+        &tag,
+        &archive_name,
+        &archive_bytes,
+        require_signature,
+        tmp.path(),
+    )?;
+
+    // 6. Extraction dans le dossier temporaire.
     extract_targz(&archive_bytes, tmp.path()).context("extraction de l'archive échouée")?;
     let extracted =
         find_binary(tmp.path(), "mnemo").context("binaire `mnemo` introuvable dans l'archive")?;
@@ -120,6 +133,73 @@ pub fn run(
     println!("\nmnemo mis à niveau : {current} → {tag} ✓");
     println!("Binaire : {}", bin.display());
     Ok(())
+}
+
+/// Applique la politique de signature Sigstore après la vérification SHA-256.
+///
+/// SHA-256 reste l'unique contrôle **obligatoire** ; cette étape est une
+/// défense en profondeur :
+/// - `cosign` absent + mode best-effort → avertissement, on continue ;
+/// - `cosign` absent + mode strict → refus ;
+/// - bundle indisponible + best-effort → avertissement, on continue ;
+/// - bundle indisponible + strict → refus ;
+/// - signature invalide → refus **dans tous les cas** ;
+/// - signature valide → on continue.
+fn enforce_signature(
+    tag: &str,
+    archive_name: &str,
+    archive_bytes: &[u8],
+    require_signature: bool,
+    workdir: &Path,
+) -> Result<()> {
+    if !signature::cosign_available() {
+        if require_signature {
+            anyhow::bail!("Signature Sigstore obligatoire mais cosign est introuvable.");
+        }
+        println!(
+            "Signature Sigstore non vérifiée : cosign absent (continuité autorisée car SHA-256 \
+             vérifié). Utilisez --require-signature pour rendre ce contrôle obligatoire."
+        );
+        return Ok(());
+    }
+
+    // cosign disponible : récupération du bundle de signature de l'archive.
+    let bundle_name = signature::signature_asset_name(archive_name);
+    let bundle_url = asset_url(tag, &bundle_name);
+    let bundle_bytes = match http_get_bytes(&bundle_url) {
+        Ok(b) => b,
+        Err(e) => {
+            if require_signature {
+                anyhow::bail!(
+                    "Signature Sigstore obligatoire mais le bundle {bundle_name} est \
+                     indisponible : {e}"
+                );
+            }
+            println!(
+                "Signature Sigstore non vérifiée : bundle indisponible ({e}) (continuité \
+                 autorisée car SHA-256 vérifié)."
+            );
+            return Ok(());
+        }
+    };
+
+    // Écriture de l'asset et du bundle sur disque pour `cosign verify-blob`.
+    let asset_path = workdir.join(archive_name);
+    std::fs::write(&asset_path, archive_bytes)
+        .context("écriture de l'archive temporaire échouée")?;
+    let bundle_path = workdir.join(&bundle_name);
+    std::fs::write(&bundle_path, &bundle_bytes)
+        .context("écriture du bundle de signature échouée")?;
+
+    match signature::verify_sigstore_bundle(&asset_path, &bundle_path) {
+        Ok(()) => {
+            println!("Signature Sigstore vérifiée ✓");
+            Ok(())
+        }
+        Err(e) => {
+            anyhow::bail!("Signature Sigstore invalide - installation refusée : {e}");
+        }
+    }
 }
 
 /// Crée un dossier temporaire dédié.

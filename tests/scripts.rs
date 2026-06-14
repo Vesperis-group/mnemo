@@ -145,3 +145,146 @@ fn suppression_du_bloc_bashrc() {
         "le reste doit être préservé"
     );
 }
+
+// --------------------------------------------------------------------------
+// Vérification Sigstore de install.sh (fonction `verify_signature`).
+//
+// On source install.sh avec MNEMO_LIB_ONLY=1 (l'installation n'est pas
+// déclenchée), puis on appelle `verify_signature` en mockant `cosign` et
+// `http_to_file` par des fonctions shell. Aucun appel réseau réel.
+// --------------------------------------------------------------------------
+
+/// Source install.sh (mode bibliothèque) et exécute `body`. `env` injecte des
+/// variables d'environnement. Renvoie la sortie du processus bash.
+fn run_install_lib(env: &[(&str, &str)], body: &str) -> std::process::Output {
+    let install = script("install.sh");
+    // On désactive le trap EXIT de install.sh après sourçage : son nettoyage de
+    // tableau (vide ici) n'est pas pertinent pour ces tests de fonction unitaire.
+    let program = format!(
+        "export MNEMO_LIB_ONLY=1\nsource '{}'\ntrap - EXIT\n{}",
+        install.display(),
+        body
+    );
+    let mut cmd = Command::new("bash");
+    cmd.arg("-c").arg(program);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    cmd.output().expect("exécution bash")
+}
+
+#[test]
+fn install_signature_stricte_refuse_si_cosign_absent() {
+    // Mode strict, aucun cosign dans le PATH : l'installation doit être refusée.
+    let out = run_install_lib(
+        &[("MNEMO_REQUIRE_SIGNATURE", "1")],
+        r#"
+        export PATH="/nonexistent-mnemo-bin"
+        verify_signature "/tmp" "mnemo-v0.8.0-x86_64-unknown-linux-musl.tar.gz" "http://127.0.0.1:9"
+        "#,
+    );
+    assert!(
+        !out.status.success(),
+        "le mode strict sans cosign doit échouer"
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("obligatoire") && err.contains("cosign"),
+        "message attendu, obtenu : {err}"
+    );
+}
+
+#[test]
+fn install_signature_non_stricte_continue_si_cosign_absent() {
+    // Mode normal, cosign absent : avertissement clair, mais on continue (0).
+    let out = run_install_lib(
+        &[],
+        r#"
+        export PATH="/nonexistent-mnemo-bin"
+        verify_signature "/tmp" "mnemo-v0.8.0-x86_64-unknown-linux-musl.tar.gz" "http://127.0.0.1:9"
+        "#,
+    );
+    assert!(
+        out.status.success(),
+        "le mode normal doit continuer (SHA-256 déjà vérifié). stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("non vérifiée") && err.contains("cosign absent"),
+        "avertissement attendu, obtenu : {err}"
+    );
+}
+
+#[test]
+fn install_signature_valide_accepte() {
+    // cosign présent (stub) qui valide, bundle « téléchargé » : on continue.
+    let dir = tempfile::tempdir().unwrap();
+    let tmp = dir.path().display().to_string();
+    let body = format!(
+        r#"
+        cosign() {{ return 0; }}
+        http_to_file() {{ printf 'bundle' > "$2"; return 0; }}
+        verify_signature "{tmp}" "mnemo-v0.8.0-x86_64-unknown-linux-musl.tar.gz" "http://127.0.0.1:9"
+        "#
+    );
+    let out = run_install_lib(&[], &body);
+    assert!(
+        out.status.success(),
+        "signature valide doit autoriser l'installation. stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Signature Sigstore vérifiée"),
+        "confirmation attendue, obtenu : {stdout}"
+    );
+}
+
+#[test]
+fn install_signature_invalide_refuse() {
+    // cosign présent (stub) qui refuse la signature : installation refusée.
+    let dir = tempfile::tempdir().unwrap();
+    let tmp = dir.path().display().to_string();
+    let body = format!(
+        r#"
+        cosign() {{ case "$1" in verify-blob) return 1 ;; *) return 0 ;; esac }}
+        http_to_file() {{ printf 'bundle' > "$2"; return 0; }}
+        verify_signature "{tmp}" "mnemo-v0.8.0-x86_64-unknown-linux-musl.tar.gz" "http://127.0.0.1:9"
+        "#
+    );
+    let out = run_install_lib(&[], &body);
+    assert!(
+        !out.status.success(),
+        "une signature invalide doit refuser l'installation"
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("invalide"),
+        "message de refus attendu, obtenu : {err}"
+    );
+}
+
+#[test]
+fn install_signature_stricte_refuse_si_bundle_indisponible() {
+    // cosign présent mais bundle non téléchargeable, mode strict : refus.
+    let dir = tempfile::tempdir().unwrap();
+    let tmp = dir.path().display().to_string();
+    let body = format!(
+        r#"
+        cosign() {{ return 0; }}
+        http_to_file() {{ return 1; }}
+        verify_signature "{tmp}" "mnemo-v0.8.0-x86_64-unknown-linux-musl.tar.gz" "http://127.0.0.1:9"
+        "#
+    );
+    let out = run_install_lib(&[("MNEMO_REQUIRE_SIGNATURE", "1")], &body);
+    assert!(
+        !out.status.success(),
+        "bundle indisponible en mode strict doit échouer"
+    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("indisponible"),
+        "message attendu, obtenu : {err}"
+    );
+}

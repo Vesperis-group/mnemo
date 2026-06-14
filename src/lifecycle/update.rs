@@ -59,7 +59,9 @@ fn prompt_install_now() -> Result<bool> {
 /// - `json` : sortie machine, vérification seule (aucune proposition d'upgrade).
 /// - `upgrade` : si une mise à jour est disponible, enchaîne `mnemo upgrade`.
 /// - `assume_yes` : avec `upgrade`, installe sans confirmation (automatisation).
-pub fn run(json: bool, upgrade: bool, assume_yes: bool) -> Result<()> {
+/// - `require_signature` : avec `upgrade`, rend la vérification Sigstore
+///   obligatoire (transmis tel quel à `upgrade`).
+pub fn run(json: bool, upgrade: bool, assume_yes: bool, require_signature: bool) -> Result<()> {
     let current = current_version();
     let latest = fetch_latest_release()?.tag_name;
     let report = UpdateReport::new(&current, &latest);
@@ -81,19 +83,20 @@ pub fn run(json: bool, upgrade: bool, assume_yes: bool) -> Result<()> {
 
     println!("Mise à jour disponible ✓");
 
-    // Option explicite `--upgrade` : on lance l'installation. `--yes` est
-    // transmis tel quel pour permettre un upgrade automatisé ; sans `--yes`,
-    // c'est `upgrade` lui-même qui demandera la confirmation finale (un seul
-    // prompt, pas de double question).
+    // Option explicite `--upgrade` : on lance l'installation. `--yes` et
+    // `--require-signature` sont transmis tels quels ; sans `--yes`, c'est
+    // `upgrade` lui-même qui demandera la confirmation finale (un seul prompt,
+    // pas de double question).
     if upgrade {
-        return super::upgrade::run(false, assume_yes, None, None);
+        return super::upgrade::run(false, assume_yes, None, None, require_signature);
     }
 
     // Sans `--upgrade` : proposer l'installation uniquement en terminal
     // interactif. Le consentement donné ici vaut confirmation, donc on appelle
-    // `upgrade` avec `assume_yes = true` pour éviter un second prompt.
+    // `upgrade` avec `assume_yes = true` pour éviter un second prompt. La
+    // politique de signature reste celle demandée (`require_signature`).
     if prompt_install_now()? {
-        return super::upgrade::run(false, true, None, None);
+        return super::upgrade::run(false, true, None, None, require_signature);
     }
 
     // Mode vérification seule (non interactif, ou refus de l'utilisateur) :

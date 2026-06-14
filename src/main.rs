@@ -123,13 +123,19 @@ fn run() -> Result<()> {
             version::run();
             Ok(())
         }
-        Command::Update { json, upgrade, yes } => lifecycle::update::run(json, upgrade, yes),
+        Command::Update {
+            json,
+            upgrade,
+            yes,
+            require_signature,
+        } => lifecycle::update::run(json, upgrade, yes, require_signature),
         Command::Upgrade {
             dry_run,
             yes,
             version,
             target,
-        } => lifecycle::upgrade::run(dry_run, yes, version, target),
+            require_signature,
+        } => lifecycle::upgrade::run(dry_run, yes, version, target, require_signature),
         Command::Uninstall {
             dry_run,
             yes,

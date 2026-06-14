@@ -22,8 +22,30 @@ fn mnemo(home: &Path) -> Command {
         .env("XDG_CONFIG_HOME", home.join(".config"))
         .env("XDG_DATA_HOME", home.join(".local/share"))
         // Empêche toute interaction et tout accès au vrai binaire installé.
-        .env("MNEMO_BIN_PATH", home.join(".local/bin/mnemo"));
+        .env("MNEMO_BIN_PATH", home.join(".local/bin/mnemo"))
+        // Par défaut, aucun cosign : la vérification Sigstore est « absente »
+        // (best-effort), ce qui rend les tests déterministes quel que soit
+        // l'hôte. Les tests de signature surchargent cette variable.
+        .env("MNEMO_COSIGN_BIN", home.join(".no-cosign"));
     cmd
+}
+
+/// Écrit un faux `cosign` exécutable dans le HOME de test et renvoie son chemin.
+/// `valid` décide du résultat de `verify-blob` (0 = valide, 1 = invalide) ;
+/// `version` répond toujours 0 pour signaler que cosign est « disponible ».
+fn fake_cosign(home: &Path, valid: bool) -> PathBuf {
+    let path = home.join(".local/bin/fake-cosign");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let verify_exit = if valid { 0 } else { 1 };
+    let script = format!(
+        "#!/bin/sh\ncase \"$1\" in\n  version) exit 0 ;;\n  verify-blob) exit {verify_exit} ;;\n  *) exit 0 ;;\nesac\n"
+    );
+    std::fs::write(&path, script).unwrap();
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    use std::os::unix::fs::PermissionsExt;
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&path, perms).unwrap();
+    path
 }
 
 /// Crée un faux binaire installé et renvoie son chemin.
@@ -200,6 +222,16 @@ fn with_mock<'a>(cmd: &'a mut Command, base: &str) -> &'a mut Command {
         .env("MNEMO_GITHUB_BASE", base)
         .env("MNEMO_OWNER", "test-owner")
         .env("MNEMO_REPO", "test-repo")
+}
+
+/// Route servant le bundle de signature `<archive>.sigstore.json` pour un tag.
+fn signature_route(tag: &str, target: &str, body: &[u8]) -> Route {
+    let archive_name = format!("mnemo-{tag}-{target}.tar.gz");
+    Route {
+        path: format!("/test-owner/test-repo/releases/download/{tag}/{archive_name}.sigstore.json"),
+        content_type: "application/json",
+        body: body.to_vec(),
+    }
 }
 
 const TARGET: &str = "x86_64-unknown-linux-musl";
@@ -671,4 +703,303 @@ fn upgrade_refuse_path_traversal() {
         "binaire intact après rejet"
     );
     assert!(!std::env::temp_dir().join("evil-upgrade.txt").exists());
+}
+
+// --------------------------------------------------------------------------
+// upgrade : vérification Sigstore (cosign) - mode best-effort et strict.
+// --------------------------------------------------------------------------
+
+#[test]
+fn upgrade_require_signature_refuse_si_cosign_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // cosign absent (MNEMO_COSIGN_BIN par défaut pointe sur un binaire absent)
+    // + mode strict : l'upgrade doit être refusé après la vérif SHA-256.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd
+        .args(["upgrade", "--yes", "--require-signature"])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "le mode strict sans cosign doit refuser l'upgrade"
+    );
+    let err = stderr(&out);
+    assert!(
+        err.contains("Signature Sigstore obligatoire") && err.contains("cosign"),
+        "message strict attendu, obtenu : {err}"
+    );
+    assert_eq!(
+        std::fs::read(&bin).unwrap(),
+        before,
+        "binaire intact (refus avant remplacement)"
+    );
+}
+
+#[test]
+fn upgrade_sans_strict_continue_si_cosign_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // cosign absent, mode normal : avertissement clair puis on continue grâce
+    // au SHA-256 obligatoire ; le binaire est bien remplacé.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("Intégrité SHA-256 vérifiée"));
+    assert!(
+        s.contains("Signature Sigstore non vérifiée") && s.contains("cosign absent"),
+        "avertissement best-effort attendu, obtenu : {s}"
+    );
+    assert_eq!(std::fs::read(&bin).unwrap(), script, "binaire remplacé");
+}
+
+#[test]
+fn upgrade_signature_valide_installe() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let cosign = fake_cosign(home, true);
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let mut routes = release_routes("v99.0.0", TARGET, &archive, None);
+    routes.push(signature_route("v99.0.0", TARGET, b"{\"fake\":\"bundle\"}"));
+    let base = start_server(routes);
+
+    // cosign présent (stub valide) + bundle servi : signature vérifiée, install.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    cmd.env("MNEMO_COSIGN_BIN", &cosign);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--require-signature",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("Intégrité SHA-256 vérifiée"));
+    assert!(
+        s.contains("Signature Sigstore vérifiée"),
+        "confirmation de signature attendue, obtenu : {s}"
+    );
+    assert_eq!(std::fs::read(&bin).unwrap(), script, "binaire remplacé");
+}
+
+#[test]
+fn upgrade_signature_invalide_refuse() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+    let cosign = fake_cosign(home, false);
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let mut routes = release_routes("v99.0.0", TARGET, &archive, None);
+    routes.push(signature_route("v99.0.0", TARGET, b"{\"fake\":\"bundle\"}"));
+    let base = start_server(routes);
+
+    // cosign présent mais vérification KO : refus, même hors mode strict.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    cmd.env("MNEMO_COSIGN_BIN", &cosign);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "une signature invalide doit refuser l'upgrade"
+    );
+    assert!(stderr(&out).contains("Signature Sigstore invalide"));
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire intact");
+}
+
+#[test]
+fn upgrade_strict_refuse_si_bundle_indisponible() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+    let cosign = fake_cosign(home, true);
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    // Pas de route de signature → bundle 404.
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    cmd.env("MNEMO_COSIGN_BIN", &cosign);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--require-signature",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "bundle indisponible en mode strict doit refuser l'upgrade"
+    );
+    assert!(stderr(&out).contains("indisponible"));
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire intact");
+}
+
+#[test]
+fn upgrade_signature_ignoree_si_sha_invalide() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+    let cosign = fake_cosign(home, true);
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    // SHA-256 volontairement faux : l'échec doit survenir AVANT toute étape de
+    // signature, même cosign présent et mode strict.
+    let bad_sha = "0".repeat(64);
+    let mut routes = release_routes("v99.0.0", TARGET, &archive, Some(&bad_sha));
+    routes.push(signature_route("v99.0.0", TARGET, b"{\"fake\":\"bundle\"}"));
+    let base = start_server(routes);
+
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    cmd.env("MNEMO_COSIGN_BIN", &cosign);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--require-signature",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "SHA-256 invalide doit échouer");
+    let combined = format!("{}{}", stdout(&out), stderr(&out));
+    assert!(
+        combined.contains("SHA-256"),
+        "l'échec doit porter sur le SHA-256, obtenu : {combined}"
+    );
+    assert!(
+        !combined.contains("Signature Sigstore"),
+        "aucune étape de signature ne doit être atteinte si le SHA-256 échoue : {combined}"
+    );
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire intact");
+}
+
+#[test]
+fn update_upgrade_require_signature_transmet_le_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // `update --upgrade --require-signature` avec cosign absent : si le flag est
+    // bien transmis au chemin upgrade, l'installation est refusée (mode strict).
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd
+        .args(["update", "--upgrade", "--yes", "--require-signature"])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "le flag --require-signature doit être propagé à upgrade"
+    );
+    assert!(stderr(&out).contains("Signature Sigstore obligatoire"));
+    assert_eq!(std::fs::read(&bin).unwrap(), before, "binaire intact");
+}
+
+#[test]
+fn update_json_reste_check_only_avec_require_signature() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+
+    let script = b"#!/bin/sh\necho ok\n";
+    let archive = make_archive("v99.0.0", TARGET, script);
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    // `--json` : sortie machine, aucune installation ni vérif de signature,
+    // même combiné à --upgrade/--require-signature.
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd
+        .args(["update", "--json", "--upgrade", "--require-signature"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let s = stdout(&out);
+    assert!(s.contains("\"update_available\": true"));
+    assert!(
+        !s.contains("Signature Sigstore"),
+        "le mode JSON ne doit déclencher aucune vérification de signature : {s}"
+    );
+    assert_eq!(
+        std::fs::read(&bin).unwrap(),
+        before,
+        "binaire intact en --json"
+    );
 }
