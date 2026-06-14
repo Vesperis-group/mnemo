@@ -183,3 +183,87 @@ fn stats_sur_base_vide_et_remplie() {
     assert!(fs.contains("Top commandes"));
     assert!(fs.contains("cargo"));
 }
+
+#[test]
+fn stats_ne_montre_plus_les_tokens_parasites() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    assert!(run(home, &["init"]).status.success());
+    for args in [
+        vec!["add", "--cmd", "sudo apt update", "--cwd", "/tmp"],
+        vec![
+            "add",
+            "--cmd",
+            "env RUST_LOG=debug cargo test",
+            "--cwd",
+            "/tmp",
+        ],
+        vec!["add", "--cmd", "/usr/bin/git status", "--cwd", "/tmp"],
+    ] {
+        assert!(run(home, &args).status.success());
+    }
+
+    let out = run(home, &["stats"]);
+    assert!(out.status.success());
+    let s = stdout(&out);
+    // Les noms normalisés apparaissent…
+    assert!(s.contains("apt"), "{s:?}");
+    assert!(s.contains("cargo"), "{s:?}");
+    assert!(s.contains("git"), "{s:?}");
+    // …et aucun token parasite ne pollue le Top commandes.
+    for junk in ["  sudo", "  env", "  |", "  -\n", "/usr/bin/git"] {
+        assert!(
+            !s.contains(junk),
+            "token parasite trouvé ({junk:?}) : {s:?}"
+        );
+    }
+}
+
+#[test]
+fn stats_json_est_valide_et_filtre() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let repo = home.join("workspace").join("demo");
+    std::fs::create_dir_all(&repo).unwrap();
+
+    let has_git = init_git_repo(&repo, "main");
+
+    assert!(run(home, &["init"]).status.success());
+    let repo_str = repo.to_str().unwrap();
+    assert!(
+        run(home, &["add", "--cmd", "cargo build", "--cwd", repo_str])
+            .status
+            .success()
+    );
+
+    // JSON valide et bien structuré.
+    let js = run(home, &["stats", "--json"]);
+    assert!(js.status.success());
+    let v: serde_json::Value = serde_json::from_str(&stdout(&js)).unwrap();
+    assert!(v["total_commands"].is_number());
+    assert!(v["top_commands"].is_array());
+    assert!(v["filters"].is_object());
+
+    if has_git {
+        // Filtre projet en texte.
+        let by_proj = run(home, &["stats", "--project", "demo"]);
+        assert!(by_proj.status.success());
+        assert!(stdout(&by_proj).contains("cargo"));
+
+        // Filtre projet en JSON.
+        let pj = run(home, &["stats", "--project", "demo", "--json"]);
+        let pv: serde_json::Value = serde_json::from_str(&stdout(&pj)).unwrap();
+        assert_eq!(pv["filters"]["project"], "demo");
+
+        // Filtre branche.
+        let by_branch = run(home, &["stats", "--branch", "main"]);
+        assert!(by_branch.status.success());
+        assert!(stdout(&by_branch).contains("cargo"));
+
+        // Filtre sans résultat : message propre.
+        let none = run(home, &["stats", "--project", "inexistant"]);
+        assert!(none.status.success());
+        assert!(stdout(&none).contains("Aucune commande trouvée pour ces filtres."));
+    }
+}

@@ -40,7 +40,11 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Migrate => cmd_migrate(),
-        Command::Stats => stats::run(),
+        Command::Stats {
+            project,
+            branch,
+            json,
+        } => stats::run(project, branch, json),
         Command::Doctor { fix, json } => {
             let code = doctor::run(fix, json)?;
             std::process::exit(code);
