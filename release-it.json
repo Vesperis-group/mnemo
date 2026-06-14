@@ -17,7 +17,11 @@
     "autoGenerate": false,
     "assets": [
       "mnemo-v*-linux-*.tar.gz",
-      "mnemo-v*-linux-*.tar.gz.sha256"
+      "mnemo-v*-linux-*.tar.gz.sha256",
+      "mnemo-v*-sbom.cdx.json",
+      "mnemo-v*-sbom.cdx.json.sha256",
+      "mnemo-v*-checksums.txt",
+      "mnemo-v*.sigstore.json"
     ]
   },
   "npm": {
@@ -29,7 +33,10 @@
       "cargo build --release",
       "MNEMO_VERSION=${version} MNEMO_TARGET_LABEL=x86_64-unknown-linux-gnu-glibc2.35 MNEMO_BINARY_PATH=target/release/mnemo bash scripts/package-release.sh",
       "cargo build --release --target x86_64-unknown-linux-musl",
-      "MNEMO_VERSION=${version} MNEMO_TARGET_LABEL=x86_64-unknown-linux-musl MNEMO_BINARY_PATH=target/x86_64-unknown-linux-musl/release/mnemo bash scripts/package-release.sh"
+      "MNEMO_VERSION=${version} MNEMO_TARGET_LABEL=x86_64-unknown-linux-musl MNEMO_BINARY_PATH=target/x86_64-unknown-linux-musl/release/mnemo bash scripts/package-release.sh",
+      "MNEMO_VERSION=${version} bash scripts/generate-sbom.sh",
+      "MNEMO_VERSION=${version} bash scripts/checksums-release.sh",
+      "MNEMO_VERSION=${version} bash scripts/sign-release.sh"
     ]
   },
   "plugins": {

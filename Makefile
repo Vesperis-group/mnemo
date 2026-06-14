@@ -9,7 +9,7 @@ MUSL_TARGET := x86_64-unknown-linux-musl
 
 .DEFAULT_GOAL := build
 .PHONY: build release test lint fmt check audit security-check release-check \
-        install uninstall clean help
+        sbom sign-check install uninstall clean help
 
 ## build : compilation en mode debug
 build:
@@ -68,9 +68,29 @@ release-check:
 	bash -n scripts/uninstall.sh
 	bash -n scripts/lib/bashrc.sh
 	bash -n scripts/package-release.sh
+	bash -n scripts/generate-sbom.sh
+	bash -n scripts/checksums-release.sh
+	bash -n scripts/sign-release.sh
 	npm ci
 	npx release-it --dry-run --ci --config release-it.json \
 		--no-git.requireCleanWorkingDir --no-git.requireBranch
+
+## sbom : génère le SBOM CycloneDX (nécessite cargo-cyclonedx épinglé)
+sbom:
+	@if ! cargo cyclonedx --version >/dev/null 2>&1; then \
+		echo "!! cargo-cyclonedx absent - 'cargo install cargo-cyclonedx --version 0.5.9 --locked'"; exit 1; \
+	fi
+	bash scripts/generate-sbom.sh
+
+## sign-check : vérifie l'outillage de signature/provenance (sans signer)
+# La signature keyless réelle nécessite l'OIDC du job CI `publish` ; en local on
+# se limite à contrôler la présence de cosign et la syntaxe du script de signature.
+sign-check:
+	@if command -v cosign >/dev/null 2>&1; then \
+		echo "--- cosign disponible"; cosign version; \
+	else echo "!! cosign absent - voir le workflow CI (job publish) pour la version épinglée"; fi
+	bash -n scripts/sign-release.sh
+	@echo "OK : la signature/provenance keyless réelle s'exécute uniquement en CI (OIDC)."
 
 ## install : compile et installe via scripts/install.sh
 install:

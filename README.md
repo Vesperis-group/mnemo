@@ -962,6 +962,8 @@ mnemo est outillé comme un vrai projet DevSecOps :
   ```bash
   make check          # fmt --check + clippy -D warnings + tests
   make audit          # cargo audit / deny / machete + gitleaks (si installés)
+  make sbom           # génère le SBOM CycloneDX (cargo-cyclonedx épinglé)
+  make sign-check     # vérifie l'outillage de signature/provenance (sans signer)
   make release-check  # porte complète : lint + tests + build release + musl
                       # + bash -n scripts + release-it --dry-run
   ```
@@ -980,23 +982,68 @@ mnemo est outillé comme un vrai projet DevSecOps :
     déclare `needs: [quality, audit]` et `if: success()`.
   - Assets publiés avec leur **checksum SHA-256** (`.tar.gz` + `.tar.gz.sha256`,
     glibc et musl), vérifié au packaging (`sha256sum -c`).
-  - Actions GitHub **épinglées par SHA** de commit ; binaire `gitleaks` vérifié
-    par SHA-256 avant exécution (pas de `curl | bash`).
+  - **SBOM CycloneDX** (`*-sbom.cdx.json`) généré par `cargo-cyclonedx`
+    (version épinglée) et attaché à chaque release, avec son `.sha256`.
+  - **Checksums agrégés** (`*-checksums.txt`) couvrant les deux archives et le
+    SBOM, vérifiés avant signature.
+  - **Signatures + provenance keyless** : chaque artefact est signé par
+    `cosign` (version épinglée, OIDC ambiant GitHub Actions — **aucun secret
+    long terme**) et accompagné d'une **attestation de provenance SLSA v1**.
+    Les bundles Sigstore (`*.sigstore.json` et `*.provenance.sigstore.json`)
+    sont produits **et vérifiés** dans les hooks `after:bump` de release-it,
+    **avant** la création de la release : toute défaillance de signature, de
+    provenance ou de SBOM **avorte la release** (aucune publication).
+  - Actions GitHub **épinglées par SHA** de commit ; binaires `gitleaks` et
+    `cosign` vérifiés par SHA-256 avant exécution (pas de `curl | bash`).
   - **Versions d'outillage figées** (aucun canal flottant) : Rust épinglé par
     [rust-toolchain.toml](rust-toolchain.toml) (`1.96.0` + `rustfmt`/`clippy` +
     cible musl, lu par le `rustup` du runner — pas d'action tierce de
     toolchain) ; Node.js épinglé par [.node-version](.node-version) (`24.15.0`,
     via `node-version-file`) ; outils Cargo (`cargo-audit`, `cargo-deny`,
-    `cargo-machete`) installés en **version exacte** (`--version … --locked`).
+    `cargo-machete`, `cargo-cyclonedx`) installés en **version exacte**
+    (`--version … --locked`).
   - **Runners épinglés** : `ubuntu-24.04` (et `ubuntu-22.04` pour l'asset GNU
     lié à la glibc 2.35), jamais `ubuntu-latest`.
   - **Lockfiles obligatoires** (`Cargo.lock`, `package-lock.json`) ; CI en
     `cargo … --locked` et `npm ci` (pas de mise à jour implicite).
   - **Permissions minimales** : `contents: read` partout, `contents: write`
-    uniquement dans le job de publication.
+    uniquement dans le job de publication, plus `id-token: write` (OIDC keyless
+    cosign) limité à ce même job.
 
   Détails complets dans [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md), section
   « Durcissement CI/CD et chaîne de release ».
+
+#### Vérifier l'intégrité d'une release
+
+Chaque release publie, pour chaque artefact `<asset>` :
+`<asset>.sha256` (empreinte), `<asset>.sigstore.json` (signature cosign) et
+`<asset>.provenance.sigstore.json` (attestation de provenance SLSA v1). Le
+fichier `mnemo-v<version>-checksums.txt` agrège les empreintes.
+
+```bash
+# 1. Empreinte SHA-256 (toujours disponible, aucun outil tiers requis)
+sha256sum -c mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz.sha256
+
+# 2. Signature cosign (keyless) — nécessite cosign installé
+cosign verify-blob \
+  --bundle mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/Vesperis-group/mnemo/\.github/workflows/.+@refs/heads/main$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz
+
+# 3. Provenance SLSA v1 (attestation)
+cosign verify-blob-attestation \
+  --bundle mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz.provenance.sigstore.json \
+  --type slsaprovenance1 --check-claims=true \
+  --certificate-identity-regexp '^https://github.com/Vesperis-group/mnemo/\.github/workflows/.+@refs/heads/main$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  mnemo-v<version>-x86_64-unknown-linux-musl.tar.gz
+```
+
+> `install.sh` et `mnemo upgrade` vérifient **systématiquement** l'empreinte
+> SHA-256 avant toute extraction ou remplacement de binaire. La vérification
+> cosign (signature + provenance) est **manuelle** en v0.7 ; son intégration
+> optionnelle à l'installateur est prévue pour une version ultérieure.
 
 ---
 
@@ -1020,6 +1067,9 @@ scripts/
 ├── install.sh         # installation (locale ou distante)
 ├── uninstall.sh       # désinstallation
 ├── package-release.sh # construction de l'archive de release
+├── generate-sbom.sh   # SBOM CycloneDX (cargo-cyclonedx)
+├── checksums-release.sh # empreintes SHA-256 agrégées des assets
+├── sign-release.sh    # signatures + provenance cosign (keyless, vérifiées)
 └── lib/bashrc.sh      # logique .bashrc partagée (et testée)
 ```
 

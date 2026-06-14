@@ -99,3 +99,27 @@ adossé à des tests automatisés (référencés entre parenthèses).
 16. **Linux uniquement, schéma SQLite stable.**
     Le schéma est versionné (`PRAGMA user_version`) et migré de façon
     idempotente et non destructive ; il n'est pas modifié sans nécessité.
+
+## Intégrité des artefacts de release
+
+> Invariants garantis par le pipeline (`release.yml`, `release-it.json`,
+> `scripts/`), pas par la suite de tests Rust.
+
+17. **Aucune release sans SBOM, signatures et provenance valides.**
+    Le SBOM CycloneDX, les signatures `cosign` et les attestations de provenance
+    SLSA v1 sont produits **et vérifiés** dans les hooks `after:bump`, donc
+    **avant** la création de la GitHub Release. Tout échec (`set -euo pipefail`)
+    avorte release-it : aucun artefact n'est publié.
+    (`scripts/{generate-sbom,checksums-release,sign-release}.sh`)
+
+18. **Signature keyless, sans secret long terme.**
+    `cosign` signe via l'OIDC ambiant de GitHub Actions (`id-token: write` limité
+    au job `publish`). Aucune clé privée n'est stockée dans le dépôt ni dans les
+    secrets du projet.
+    (`scripts/sign-release.sh`, `.github/workflows/release.yml`)
+
+19. **Tout artefact publié est couvert par une empreinte SHA-256.**
+    Chaque archive a son `.tar.gz.sha256`, le SBOM a son `.sha256`, et un fichier
+    `*-checksums.txt` agrège les empreintes de tous les assets, vérifié avant
+    signature.
+    (`scripts/{package-release,generate-sbom,checksums-release}.sh`)

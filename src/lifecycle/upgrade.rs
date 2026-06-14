@@ -88,6 +88,12 @@ pub fn run(
     }
     println!("Intégrité SHA-256 vérifiée ✓");
 
+    // Note (v0.7) : la release publie aussi une signature cosign et une
+    // attestation de provenance SLSA par artefact. Leur vérification reste
+    // MANUELLE (cf. README, « Vérifier l'intégrité d'une release »).
+    // TODO v0.8 : vérification cosign optionnelle ici, sans affaiblir le
+    // contrôle SHA-256 ci-dessus (qui demeure obligatoire et bloquant).
+
     // 6. Extraction dans un dossier temporaire.
     let tmp = tempdir()?;
     extract_targz(&archive_bytes, tmp.path()).context("extraction de l'archive échouée")?;

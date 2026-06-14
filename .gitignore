@@ -9,5 +9,11 @@
 /mnemo-v*-linux-*.tar.gz
 /mnemo-v*-linux-*.tar.gz.sha256
 
+# Artefacts d'intégrité de release (SBOM, checksums, bundles cosign)
+/mnemo-v*-sbom.cdx.json
+/mnemo-v*-sbom.cdx.json.sha256
+/mnemo-v*-checksums.txt
+/mnemo-v*.sigstore.json
+
 # Divers
 *.log
