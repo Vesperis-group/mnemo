@@ -1,6 +1,13 @@
 # Changelog
 
 
+## [0.6.1](https://github.com/Vesperis-group/mnemo/compare/v0.6.0...v0.6.1) (2026-06-14)
+
+### Bug Fixes
+
+* ajuste la politique cargo-deny ([53a9ea3](https://github.com/Vesperis-group/mnemo/commit/53a9ea312bfbf0c30b6469cc320094531f88081f))
+* utilise le CLI gitleaks dans l'audit CI ([5139d8b](https://github.com/Vesperis-group/mnemo/commit/5139d8bf8d07a22a491ef8a3c46d323637643421))
+
 ## [0.6.0](https://github.com/Vesperis-group/mnemo/compare/v0.5.1...v0.6.0) (2026-06-14)
 
 ### Features
