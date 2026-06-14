@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Désinstallateur de mnemo — retire le binaire, propose de nettoyer le .bashrc
+# Désinstallateur de mnemo - retire le binaire, propose de nettoyer le .bashrc
 # et, sur confirmation explicite, supprime les données locales.
 #
 # Usage :
@@ -67,7 +67,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Données locales — JAMAIS supprimées sans confirmation explicite.
+# 3. Données locales - JAMAIS supprimées sans confirmation explicite.
 #    MNEMO_ASSUME_YES ne suffit PAS : il faut MNEMO_PURGE=1 ou un "oui"
 #    interactif dédié, afin d'éviter toute suppression accidentelle.
 # ---------------------------------------------------------------------------

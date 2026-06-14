@@ -1,7 +1,7 @@
 //! Interrogation de l'API GitHub Releases.
 //!
 //! On utilise le client HTTP bloquant `ureq` (TLS rustls, sans runtime async),
-//! et on isole la couche réseau de la couche d'analyse — cette dernière, pure,
+//! et on isole la couche réseau de la couche d'analyse - cette dernière, pure,
 //! est testée sans réseau dans [`parse_github_latest_release`].
 
 use anyhow::{Context, Result};

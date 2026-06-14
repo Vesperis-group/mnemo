@@ -294,7 +294,7 @@ fn render_help_popup(f: &mut Frame, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Aide — raccourcis (Esc pour fermer) "),
+                .title(" Aide - raccourcis (Esc pour fermer) "),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(p, popup);

@@ -534,7 +534,7 @@ fn is_executable(path: &Path) -> bool {
 // ---------------------------------------------------------------------------
 
 fn render_text(report: &Report) {
-    println!("mnemo doctor — rapport de diagnostic");
+    println!("mnemo doctor - rapport de diagnostic");
     println!("------------------------------------");
     for c in &report.checks {
         println!("[{:^5}] {}", c.status.label(), c.message);

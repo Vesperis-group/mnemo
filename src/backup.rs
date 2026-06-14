@@ -1,9 +1,9 @@
 //! Sauvegarde et restauration locales (`mnemo backup` / `mnemo restore`).
 //!
 //! Une sauvegarde est une archive `.tar.gz` autonome contenant :
-//! - `history.db`   — la base SQLite complète ;
-//! - `config.toml`  — la configuration (si présente) ;
-//! - `metadata.json` — des métadonnées de traçabilité (version, date, tailles…).
+//! - `history.db`   - la base SQLite complète ;
+//! - `config.toml`  - la configuration (si présente) ;
+//! - `metadata.json` - des métadonnées de traçabilité (version, date, tailles…).
 //!
 //! Sécurité : la restauration valide systématiquement l'archive (DB ouvrable,
 //! table `commands`, version de schéma) et crée automatiquement une sauvegarde

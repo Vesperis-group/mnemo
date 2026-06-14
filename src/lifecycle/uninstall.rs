@@ -2,16 +2,52 @@
 //! données par défaut. `--purge` supprime aussi config, base et sauvegardes,
 //! après sauvegarde et confirmation explicite.
 
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::{backup, config, confirm};
+use crate::{backup, config};
 
 /// Marqueur d'ouverture du bloc d'intégration dans `~/.bashrc`.
 pub const BASHRC_BEGIN_MARKER: &str = "# >>> mnemo init >>>";
 /// Marqueur de fermeture du bloc d'intégration dans `~/.bashrc`.
 pub const BASHRC_END_MARKER: &str = "# <<< mnemo init <<<";
+
+/// Issue d'une demande de confirmation pour `uninstall`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    /// Poursuivre la désinstallation.
+    Proceed,
+    /// L'utilisateur a refusé (réponse vide / `n` / autre) : on annule.
+    Cancelled,
+    /// Mode non interactif sans `--yes` : confirmation requise (échec propre).
+    RequiresConfirmation,
+}
+
+/// Interprète une réponse interactive : vrai si elle vaut accord.
+pub fn interpret_confirmation(answer: &str) -> bool {
+    let a = answer.trim().to_lowercase();
+    matches!(a.as_str(), "y" | "yes" | "o" | "oui")
+}
+
+/// Décide de l'issue d'une demande de confirmation (fonction pure, testable).
+///
+/// - `assume_yes` (`--yes`) : autorise directement.
+/// - Sinon, en mode non interactif : [`Decision::RequiresConfirmation`].
+/// - Sinon : selon la réponse interactive lue (`answer`).
+pub fn decide(assume_yes: bool, interactive: bool, answer: Option<&str>) -> Decision {
+    if assume_yes {
+        return Decision::Proceed;
+    }
+    if !interactive {
+        return Decision::RequiresConfirmation;
+    }
+    match answer {
+        Some(a) if interpret_confirmation(a) => Decision::Proceed,
+        _ => Decision::Cancelled,
+    }
+}
 
 /// Actions décidées par [`plan_uninstall`] (cœur logique pur et testable).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,24 +230,46 @@ pub fn run(dry_run: bool, assume_yes: bool, purge: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Purge : sauvegarde + confirmation explicite avant toute suppression.
-    if purge && (actions.remove_config || actions.remove_data) {
-        // Sauvegarde de sécurité, placée HORS du dossier de données pour
-        // survivre à la purge.
-        if data_present {
-            let dest = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-            match backup::create_backup(Some(&dest)) {
-                Ok(info) => println!("Sauvegarde de sécurité créée : {}", info.path.display()),
-                Err(e) => eprintln!("Avertissement : sauvegarde impossible ({e})"),
-            }
-        }
-        let ok = confirm::confirm(
-            "Cette action supprimera config, base et sauvegardes. Continuer ?",
-            assume_yes,
-        )?;
-        if !ok {
-            println!("Purge annulée. Aucune donnée supprimée.");
+    // Confirmation OBLIGATOIRE pour toute désinstallation : la suppression du
+    // binaire et de l'intégration shell reste une action destructive, même si
+    // les données sont conservées.
+    let prompt = if purge {
+        "Cette action supprimera config, base et sauvegardes. Continuer ? [y/N] "
+    } else {
+        "Désinstaller mnemo tout en conservant les données ? [y/N] "
+    };
+
+    let interactive = io::stdin().is_terminal();
+    let answer = if !assume_yes && interactive {
+        print!("{prompt}");
+        io::stdout().flush()?;
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        Some(buf)
+    } else {
+        None
+    };
+
+    match decide(assume_yes, interactive, answer.as_deref()) {
+        Decision::Proceed => {}
+        Decision::Cancelled => {
+            println!("Désinstallation annulée. Aucune modification effectuée.");
             return Ok(());
+        }
+        Decision::RequiresConfirmation => {
+            anyhow::bail!(
+                "Confirmation requise. Relancez avec --yes pour confirmer ou --dry-run pour prévisualiser."
+            );
+        }
+    }
+
+    // Purge : sauvegarde de sécurité AVANT toute suppression, placée HORS du
+    // dossier de données pour survivre à la purge.
+    if purge && (actions.remove_config || actions.remove_data) && data_present {
+        let dest = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        match backup::create_backup(Some(&dest)) {
+            Ok(info) => println!("Sauvegarde de sécurité créée : {}", info.path.display()),
+            Err(e) => eprintln!("Avertissement : sauvegarde impossible ({e})"),
         }
     }
 
@@ -318,5 +376,40 @@ alias ll='ls -la'
     fn detection_bloc() {
         assert!(bashrc_has_block("a\n# >>> mnemo init >>>\nb\n"));
         assert!(!bashrc_has_block("a\nb\n"));
+    }
+
+    #[test]
+    fn interpretation_reponse() {
+        for ok in ["y", "Y", "yes", "Yes", "o", "O", "oui", " y \n"] {
+            assert!(interpret_confirmation(ok), "{ok:?} doit valoir accord");
+        }
+        for ko in ["", "n", "no", "non", "x", " "] {
+            assert!(!interpret_confirmation(ko), "{ko:?} doit valoir refus");
+        }
+    }
+
+    #[test]
+    fn decision_yes_force_proceed() {
+        // --yes l'emporte, interactif ou non.
+        assert_eq!(decide(true, false, None), Decision::Proceed);
+        assert_eq!(decide(true, true, Some("n")), Decision::Proceed);
+    }
+
+    #[test]
+    fn decision_non_interactif_requiert_confirmation() {
+        assert_eq!(decide(false, false, None), Decision::RequiresConfirmation);
+    }
+
+    #[test]
+    fn decision_interactive_oui_execute() {
+        assert_eq!(decide(false, true, Some("y")), Decision::Proceed);
+        assert_eq!(decide(false, true, Some("yes")), Decision::Proceed);
+    }
+
+    #[test]
+    fn decision_interactive_non_annule() {
+        assert_eq!(decide(false, true, Some("n")), Decision::Cancelled);
+        assert_eq!(decide(false, true, Some("")), Decision::Cancelled);
+        assert_eq!(decide(false, true, None), Decision::Cancelled);
     }
 }

@@ -44,7 +44,7 @@ pub fn run(
 
     // 2. Déjà à jour ? (sauf si une version explicite est demandée.)
     if !explicit && !update_available(&current, &tag) {
-        println!("mnemo est déjà à jour ✓ — rien à faire.");
+        println!("mnemo est déjà à jour ✓ - rien à faire.");
         return Ok(());
     }
 
@@ -83,7 +83,7 @@ pub fn run(
     // 5. Vérification d'intégrité AVANT toute extraction.
     if !verify_sha256(&archive_bytes, &expected) {
         anyhow::bail!(
-            "vérification SHA-256 échouée — installation refusée (archive corrompue ou altérée)"
+            "vérification SHA-256 échouée - installation refusée (archive corrompue ou altérée)"
         );
     }
     println!("Intégrité SHA-256 vérifiée ✓");

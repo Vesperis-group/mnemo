@@ -1,4 +1,4 @@
-# Makefile — raccourcis de développement et d'installation pour mnemo.
+# Makefile - raccourcis de développement et d'installation pour mnemo.
 # Usage : make <cible>
 
 CARGO ?= cargo
