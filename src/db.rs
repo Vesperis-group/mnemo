@@ -55,9 +55,117 @@ pub struct SearchFilter {
 
 impl SearchFilter {
     /// Vrai si aucun critère n'est défini.
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.project.is_none() && self.branch.is_none()
     }
+}
+
+/// Filtre de requête avancé (`mnemo search`, `mnemo stats --since`).
+///
+/// Tous les critères sont **combinables** (ET logique). Les champs temporels
+/// `since`/`before` sont des bornes au format `YYYY-MM-DD HH:MM:SS` (ou un
+/// préfixe `YYYY-MM-DD`), comparées lexicographiquement à `created_at` — ce qui
+/// équivaut à une comparaison chronologique grâce au format ISO trié.
+#[derive(Debug, Clone, Default)]
+pub struct QueryFilter {
+    /// Projet : chemin `git_root` complet ou nom du dossier racine.
+    pub project: Option<String>,
+    /// Branche Git exacte.
+    pub branch: Option<String>,
+    /// Répertoire de travail exact.
+    pub cwd: Option<String>,
+    /// Shell exact (ex : `bash`).
+    pub shell: Option<String>,
+    /// Code de sortie exact.
+    pub exit_code: Option<i64>,
+    /// N'inclure que les échecs (`exit_code` présent et ≠ 0).
+    pub failed: bool,
+    /// Borne inférieure incluse : `created_at >= since`.
+    pub since: Option<String>,
+    /// Borne supérieure exclue : `created_at < before`.
+    pub before: Option<String>,
+}
+
+impl QueryFilter {
+    /// Construit le fragment `WHERE` et les paramètres liés associés.
+    ///
+    /// La clause est toujours valide (au minimum `1=1`), et chaque critère est
+    /// passé en paramètre lié — jamais interpolé — pour éviter toute injection.
+    fn build_where(&self) -> (String, Vec<Box<dyn rusqlite::ToSql>>) {
+        let mut clauses: Vec<String> = Vec::new();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        if let Some(branch) = &self.branch {
+            clauses.push("git_branch = ?".to_string());
+            params.push(Box::new(branch.clone()));
+        }
+        if let Some(project) = &self.project {
+            clauses.push("(git_root = ? OR git_root LIKE ?)".to_string());
+            params.push(Box::new(project.clone()));
+            params.push(Box::new(format!("%/{project}")));
+        }
+        if let Some(cwd) = &self.cwd {
+            clauses.push("cwd = ?".to_string());
+            params.push(Box::new(cwd.clone()));
+        }
+        if let Some(shell) = &self.shell {
+            clauses.push("shell = ?".to_string());
+            params.push(Box::new(shell.clone()));
+        }
+        if let Some(code) = self.exit_code {
+            clauses.push("exit_code = ?".to_string());
+            params.push(Box::new(code));
+        }
+        if self.failed {
+            clauses.push("exit_code IS NOT NULL AND exit_code != 0".to_string());
+        }
+        if let Some(since) = &self.since {
+            clauses.push("created_at >= ?".to_string());
+            params.push(Box::new(since.clone()));
+        }
+        if let Some(before) = &self.before {
+            clauses.push("created_at < ?".to_string());
+            params.push(Box::new(before.clone()));
+        }
+
+        let where_sql = if clauses.is_empty() {
+            "1 = 1".to_string()
+        } else {
+            clauses.join(" AND ")
+        };
+        (where_sql, params)
+    }
+}
+
+/// Charge les commandes correspondant à un [`QueryFilter`] avancé, des plus
+/// récentes aux plus anciennes. `limit` borne le nombre de lignes (`None` =
+/// toutes), utile pour `mnemo stats` qui agrège l'intégralité.
+pub fn fetch_query(
+    conn: &Connection,
+    filter: &QueryFilter,
+    limit: Option<usize>,
+) -> Result<Vec<CommandRecord>> {
+    let (where_sql, params) = filter.build_where();
+    let limit_sql = match limit {
+        Some(n) => format!("LIMIT {}", n as i64),
+        None => String::new(),
+    };
+    let sql = format!(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands
+         WHERE {where_sql}
+         ORDER BY created_at DESC, id DESC
+         {limit_sql}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), row_to_record)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
 }
 
 /// Ouvre (ou crée) la base SQLite sur disque et initialise le schéma.
@@ -371,6 +479,62 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (y, m, d)
 }
 
+/// Valide une date au format `AAAA-MM-JJ` (sans heure).
+pub fn is_valid_date(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 10 {
+        return false;
+    }
+    for (i, c) in b.iter().enumerate() {
+        let ok = match i {
+            4 | 7 => *c == b'-',
+            _ => c.is_ascii_digit(),
+        };
+        if !ok {
+            return false;
+        }
+    }
+    let month: u32 = s[5..7].parse().unwrap_or(0);
+    let day: u32 = s[8..10].parse().unwrap_or(0);
+    (1..=12).contains(&month) && (1..=31).contains(&day)
+}
+
+/// Secondes Unix courantes (UTC).
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Résout une borne inférieure `--since` : durée (`7d`, `2w`, `3m`, `1y`) ou
+/// date `AAAA-MM-JJ`. Renvoie `None` si la spec est invalide — **jamais de
+/// panique** : l'appelant peut alors ignorer le filtre proprement.
+pub fn resolve_since(spec: &str) -> Option<String> {
+    let spec = spec.trim();
+    if let Ok(secs) = crate::prune::parse_duration(spec) {
+        return Some(format_timestamp(now_secs().saturating_sub(secs)));
+    }
+    if is_valid_date(spec) {
+        return Some(format!("{spec} 00:00:00"));
+    }
+    None
+}
+
+/// Résout une borne supérieure `--before` : date `AAAA-MM-JJ` (exclue) ou durée.
+/// Renvoie `None` si la spec est invalide (pas de panique).
+pub fn resolve_before(spec: &str) -> Option<String> {
+    let spec = spec.trim();
+    if is_valid_date(spec) {
+        // `created_at < "AAAA-MM-JJ"` exclut tout ce jour : « avant cette date ».
+        return Some(spec.to_string());
+    }
+    if let Ok(secs) = crate::prune::parse_duration(spec) {
+        return Some(format_timestamp(now_secs().saturating_sub(secs)));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,5 +668,87 @@ mod tests {
         .unwrap();
         assert_eq!(both.len(), 1);
         assert_eq!(both[0].command, "cargo test");
+    }
+
+    /// Insère une commande en forçant `created_at` (pour tester les bornes).
+    fn insert_at(conn: &Connection, command: &str, shell: &str, exit: Option<i64>, when: &str) {
+        insert_command(
+            conn,
+            &NewCommand {
+                command: command.into(),
+                cwd: Some("/tmp".into()),
+                shell: Some(shell.into()),
+                hostname: Some("host".into()),
+                exit_code: exit,
+                created_at: when.into(),
+                git_root: None,
+                git_branch: None,
+                git_remote: None,
+                session_id: None,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn query_filter_combine_les_criteres() {
+        let conn = open_in_memory().unwrap();
+        insert_at(&conn, "ok-bash", "bash", Some(0), "2026-01-01 10:00:00");
+        insert_at(&conn, "ko-bash", "bash", Some(1), "2026-03-01 10:00:00");
+        insert_at(&conn, "ok-zsh", "zsh", Some(0), "2026-06-01 10:00:00");
+
+        // Échecs uniquement.
+        let failed = fetch_query(
+            &conn,
+            &QueryFilter {
+                failed: true,
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].command, "ko-bash");
+
+        // Code de sortie exact.
+        let ok = fetch_query(
+            &conn,
+            &QueryFilter {
+                exit_code: Some(0),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(ok.len(), 2);
+
+        // Shell + borne temporelle (avant le 2026-04-01).
+        let bash_before = fetch_query(
+            &conn,
+            &QueryFilter {
+                shell: Some("bash".into()),
+                before: Some("2026-04-01".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(bash_before.len(), 2);
+
+        // Borne since incluse.
+        let since = fetch_query(
+            &conn,
+            &QueryFilter {
+                since: Some("2026-03-01 00:00:00".into()),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+        assert_eq!(since.len(), 2);
+
+        // Limite respectée.
+        let limited = fetch_query(&conn, &QueryFilter::default(), Some(1)).unwrap();
+        assert_eq!(limited.len(), 1);
     }
 }

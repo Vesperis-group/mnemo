@@ -4,6 +4,8 @@
 //! `--output`, l'export est écrit sur stdout ; sinon dans le fichier indiqué.
 
 use anyhow::{Context, Result};
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use serde::Serialize;
 use std::io::Write;
 use std::path::PathBuf;
@@ -58,6 +60,7 @@ pub fn run(
     project: Option<String>,
     branch: Option<String>,
     output: Option<PathBuf>,
+    gzip: bool,
 ) -> Result<()> {
     let conn = db::open(&config::db_path()?)?;
     let filter = SearchFilter { project, branch };
@@ -70,7 +73,13 @@ pub fn run(
 
     match output {
         Some(path) => {
-            std::fs::write(&path, content)
+            let path = if gzip { gz_path(path) } else { path };
+            let bytes = if gzip {
+                gzip_bytes(content.as_bytes())?
+            } else {
+                content.into_bytes()
+            };
+            std::fs::write(&path, &bytes)
                 .with_context(|| format!("écriture de l'export {}", path.display()))?;
             eprintln!(
                 "Export écrit dans {} ({} commandes).",
@@ -80,15 +89,45 @@ pub fn run(
         }
         None => {
             let mut stdout = std::io::stdout().lock();
-            stdout.write_all(content.as_bytes())?;
+            if gzip {
+                stdout.write_all(&gzip_bytes(content.as_bytes())?)?;
+            } else {
+                stdout.write_all(content.as_bytes())?;
+            }
         }
     }
     Ok(())
 }
 
+/// Ajoute l'extension `.gz` à un chemin de sortie si elle est absente.
+fn gz_path(path: PathBuf) -> PathBuf {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("gz") => path,
+        _ => {
+            let mut name = path.into_os_string();
+            name.push(".gz");
+            PathBuf::from(name)
+        }
+    }
+}
+
+/// Compresse des octets au format gzip.
+fn gzip_bytes(data: &[u8]) -> Result<Vec<u8>> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data)?;
+    Ok(encoder.finish()?)
+}
+
 /// Sérialise les commandes en tableau JSON.
 fn render_json(records: &[CommandRecord]) -> Result<String> {
     let rows: Vec<ExportRow> = records.iter().map(ExportRow::from).collect();
+    Ok(serde_json::to_string_pretty(&rows)?)
+}
+
+/// Sérialise une sélection de commandes en JSON stable (réutilisé par
+/// `mnemo search --print --json`).
+pub fn records_to_json(records: &[&CommandRecord]) -> Result<String> {
+    let rows: Vec<ExportRow> = records.iter().map(|r| ExportRow::from(*r)).collect();
     Ok(serde_json::to_string_pretty(&rows)?)
 }
 
@@ -162,6 +201,30 @@ mod tests {
         assert_eq!(
             out.trim(),
             "id,command,cwd,shell,hostname,exit_code,created_at,git_root,git_branch,git_remote,session_id"
+        );
+    }
+
+    #[test]
+    fn gzip_roundtrip_conserve_le_contenu() {
+        use flate2::read::GzDecoder;
+        use std::io::Read;
+
+        let original = b"id,command\n1,ls -la\n";
+        let compressed = gzip_bytes(original).unwrap();
+        assert_ne!(compressed, original, "les octets doivent être compressés");
+
+        let mut decoder = GzDecoder::new(&compressed[..]);
+        let mut restored = Vec::new();
+        decoder.read_to_end(&mut restored).unwrap();
+        assert_eq!(restored, original);
+    }
+
+    #[test]
+    fn gz_path_ajoute_extension_si_absente() {
+        assert_eq!(gz_path(PathBuf::from("e.json")), PathBuf::from("e.json.gz"));
+        assert_eq!(
+            gz_path(PathBuf::from("e.json.gz")),
+            PathBuf::from("e.json.gz")
         );
     }
 }

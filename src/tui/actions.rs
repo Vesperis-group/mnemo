@@ -39,10 +39,14 @@ pub enum Action {
     ToggleFilters,
     /// Basculer le focus liste/détails.
     ToggleDetailsFocus,
+    /// Donner le focus à la recherche (saisie).
+    FocusSearch,
     /// Recharger les résultats depuis la base.
     Refresh,
     /// Copier/émettre la commande sélectionnée.
     Copy,
+    /// Exporter les résultats filtrés vers un fichier JSON.
+    ExportResults,
     /// Demander la suppression de la commande sélectionnée.
     RequestDelete,
     /// Confirmer la suppression.
@@ -55,6 +59,10 @@ pub enum Action {
     FilterBranchFromSelection,
     /// Filtrer par le répertoire de la sélection.
     FilterCwdFromSelection,
+    /// Filtrer par le projet courant (dossier de lancement).
+    FilterProjectCurrent,
+    /// Filtrer par la branche courante (dossier de lancement).
+    FilterBranchCurrent,
     /// Faire défiler le filtre de statut (tous/succès/échecs).
     CycleStatusFilter,
     /// Vider tous les filtres.

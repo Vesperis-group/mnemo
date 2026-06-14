@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::io::Write;
 
 use crate::config;
-use crate::db::{self, CommandRecord, SearchFilter};
+use crate::db::{self, CommandRecord};
 
 /// Nombre d'entrées affichées dans chaque palmarès.
 const TOP_N: usize = 10;
@@ -22,11 +22,12 @@ const TOP_N: usize = 10;
 pub struct Filters {
     pub project: Option<String>,
     pub branch: Option<String>,
+    pub since: Option<String>,
 }
 
 impl Filters {
     fn is_empty(&self) -> bool {
-        self.project.is_none() && self.branch.is_none()
+        self.project.is_none() && self.branch.is_none() && self.since.is_none()
     }
 }
 
@@ -42,20 +43,64 @@ pub struct Stats {
     pub top_commands: Vec<(String, usize)>,
     pub top_dirs: Vec<(String, usize)>,
     pub top_projects: Vec<(String, usize)>,
+    /// Top shells utilisés (bash, zsh…).
+    pub top_shells: Vec<(String, usize)>,
+    /// Nombre de commandes par jour (`YYYY-MM-DD` → total), triées par date.
+    pub daily: Vec<(String, usize)>,
+}
+
+/// Taux d'échec (commandes en échec / total), dans `[0.0, 1.0]`.
+pub fn failure_rate(stats: &Stats) -> f64 {
+    if stats.total == 0 {
+        0.0
+    } else {
+        stats.failed as f64 / stats.total as f64
+    }
 }
 
 /// Point d'entrée de la commande.
-pub fn run(project: Option<String>, branch: Option<String>, json: bool) -> Result<()> {
+pub fn run(
+    project: Option<String>,
+    branch: Option<String>,
+    since: Option<String>,
+    json: bool,
+) -> Result<()> {
     let cfg = config::Config::load()?;
     let ignored = &cfg.stats.ignored_commands;
     let conn = db::open(&config::db_path()?)?;
-    let filter = SearchFilter {
+
+    // `--project current` → nom du projet du dossier courant.
+    let project = match project {
+        Some(p) if p.eq_ignore_ascii_case("current") => crate::project::current_name(),
+        other => other,
+    };
+
+    // Borne temporelle optionnelle (durée ou date), ignorée proprement si
+    // invalide (pas de panique).
+    let since_bound = match since.as_deref() {
+        Some(spec) => match db::resolve_since(spec) {
+            Some(bound) => Some(bound),
+            None => {
+                eprintln!("Valeur --since invalide ({spec:?}) : filtre temporel ignoré.");
+                None
+            }
+        },
+        None => None,
+    };
+
+    let filter = db::QueryFilter {
         project: project.clone(),
         branch: branch.clone(),
+        since: since_bound,
+        ..Default::default()
     };
-    let records = db::all_commands(&conn, &filter)?;
+    let records = db::fetch_query(&conn, &filter, None)?;
     let stats = compute(&records, ignored);
-    let filters = Filters { project, branch };
+    let filters = Filters {
+        project,
+        branch,
+        since,
+    };
 
     // Sortie via un stdout verrouillé : un `BrokenPipe` (sortie pipée vers
     // `head`, `less`…) remonte comme une erreur propre au lieu de faire
@@ -94,6 +139,8 @@ pub fn compute(records: &[CommandRecord], ignored_commands: &[String]) -> Stats 
     let mut cmd_counts: HashMap<String, usize> = HashMap::new();
     let mut dir_counts: HashMap<String, usize> = HashMap::new();
     let mut proj_counts: HashMap<String, usize> = HashMap::new();
+    let mut shell_counts: HashMap<String, usize> = HashMap::new();
+    let mut day_counts: HashMap<String, usize> = HashMap::new();
 
     for r in records {
         match normalize_command_name(&r.command) {
@@ -108,10 +155,22 @@ pub fn compute(records: &[CommandRecord], ignored_commands: &[String]) -> Stats 
             git_roots.insert(root.to_string());
             *proj_counts.entry(project_name(root)).or_insert(0) += 1;
         }
+        if let Some(shell) = r.shell.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            *shell_counts.entry(shell.to_string()).or_insert(0) += 1;
+        }
+        // Activité quotidienne : préfixe date `YYYY-MM-DD` de `created_at`.
+        if r.created_at.len() >= 10 {
+            *day_counts
+                .entry(r.created_at[..10].to_string())
+                .or_insert(0) += 1;
+        }
         if matches!(r.exit_code, Some(code) if code != 0) {
             failed += 1;
         }
     }
+
+    let mut daily: Vec<(String, usize)> = day_counts.into_iter().collect();
+    daily.sort_by(|a, b| a.0.cmp(&b.0));
 
     Stats {
         total,
@@ -121,6 +180,8 @@ pub fn compute(records: &[CommandRecord], ignored_commands: &[String]) -> Stats 
         top_commands: top_n(cmd_counts, TOP_N),
         top_dirs: top_n(dir_counts, TOP_N),
         top_projects: top_n(proj_counts, TOP_N),
+        top_shells: top_n(shell_counts, TOP_N),
+        daily,
     }
 }
 
@@ -241,6 +302,34 @@ fn top_n(counts: std::collections::HashMap<String, usize>, n: usize) -> Vec<(Str
     v
 }
 
+/// Secondes Unix courantes (UTC).
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Construit la fenêtre d'activité des `days` derniers jours (aujourd'hui
+/// inclus), en remplissant à 0 les jours sans activité. Résultat trié du plus
+/// ancien au plus récent. Fonction pure (référence temporelle injectée).
+fn activity_window(
+    daily: &[(String, usize)],
+    today_secs: u64,
+    days: usize,
+) -> Vec<(String, usize)> {
+    use std::collections::HashMap;
+    let map: HashMap<&str, usize> = daily.iter().map(|(d, c)| (d.as_str(), *c)).collect();
+    let mut out = Vec::with_capacity(days);
+    for k in (0..days).rev() {
+        let secs = today_secs.saturating_sub(k as u64 * 86_400);
+        let date = db::format_timestamp(secs)[..10].to_string();
+        let count = map.get(date.as_str()).copied().unwrap_or(0);
+        out.push((date, count));
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Rendu texte.
 // ---------------------------------------------------------------------------
@@ -251,9 +340,10 @@ fn render_text<W: Write>(out: &mut W, stats: &Stats, filters: &Filters) -> std::
     if !filters.is_empty() {
         writeln!(
             out,
-            "Filtres                : projet={}, branche={}",
+            "Filtres                : projet={}, branche={}, depuis={}",
             filters.project.as_deref().unwrap_or("-"),
             filters.branch.as_deref().unwrap_or("-"),
+            filters.since.as_deref().unwrap_or("-"),
         )?;
     }
     writeln!(out, "Commandes enregistrées : {}", stats.total)?;
@@ -262,6 +352,11 @@ fn render_text<W: Write>(out: &mut W, stats: &Stats, filters: &Filters) -> std::
         out,
         "Commandes en échec     : {} (exit_code ≠ 0)",
         stats.failed
+    )?;
+    writeln!(
+        out,
+        "Taux d'échec           : {:.1} %",
+        failure_rate(stats) * 100.0
     )?;
 
     render_section(out, "Top commandes", &stats.top_commands)?;
@@ -274,6 +369,28 @@ fn render_text<W: Write>(out: &mut W, stats: &Stats, filters: &Filters) -> std::
     }
     render_section(out, "Top dossiers", &stats.top_dirs)?;
     render_section(out, "Top projets Git", &stats.top_projects)?;
+    render_section(out, "Top shells", &stats.top_shells)?;
+    render_activity(out, stats)?;
+    Ok(())
+}
+
+/// Affiche l'activité quotidienne des 7 derniers jours (barres) et le total des
+/// 30 derniers jours.
+fn render_activity<W: Write>(out: &mut W, stats: &Stats) -> std::io::Result<()> {
+    let now = now_secs();
+    let week = activity_window(&stats.daily, now, 7);
+    let month = activity_window(&stats.daily, now, 30);
+    let month_total: usize = month.iter().map(|(_, c)| c).sum();
+    let max = week.iter().map(|(_, c)| *c).max().unwrap_or(0);
+
+    writeln!(out)?;
+    writeln!(out, "Activité (7 derniers jours) :")?;
+    for (date, count) in &week {
+        let bar_len = (count * 20).checked_div(max).unwrap_or(0);
+        let bar = "#".repeat(bar_len);
+        writeln!(out, "  {date}  {count:>4}  {bar}")?;
+    }
+    writeln!(out, "  30 derniers jours : {month_total} commande(s)")?;
     Ok(())
 }
 
@@ -311,23 +428,35 @@ struct PathCount {
 }
 
 #[derive(Serialize)]
+struct DayCount {
+    date: String,
+    count: usize,
+}
+
+#[derive(Serialize)]
 struct JsonOutput {
     total_commands: usize,
     git_projects: usize,
     failed_commands: usize,
+    failure_rate: f64,
     ignored_for_top_commands: usize,
     ignored_commands_config: Vec<String>,
     filters: Filters,
     top_commands: Vec<NamedCount>,
     top_directories: Vec<PathCount>,
     top_projects: Vec<NamedCount>,
+    top_shells: Vec<NamedCount>,
+    activity_last_7_days: Vec<DayCount>,
+    activity_last_30_days: Vec<DayCount>,
 }
 
 fn render_json(stats: &Stats, filters: &Filters, ignored_commands: &[String]) -> String {
+    let now = now_secs();
     let output = JsonOutput {
         total_commands: stats.total,
         git_projects: stats.git_projects,
         failed_commands: stats.failed,
+        failure_rate: failure_rate(stats),
         ignored_for_top_commands: stats.ignored_for_top_commands,
         ignored_commands_config: ignored_commands.to_vec(),
         filters: filters.clone(),
@@ -354,6 +483,22 @@ fn render_json(stats: &Stats, filters: &Filters, ignored_commands: &[String]) ->
                 name: name.clone(),
                 count: *count,
             })
+            .collect(),
+        top_shells: stats
+            .top_shells
+            .iter()
+            .map(|(name, count)| NamedCount {
+                name: name.clone(),
+                count: *count,
+            })
+            .collect(),
+        activity_last_7_days: activity_window(&stats.daily, now, 7)
+            .into_iter()
+            .map(|(date, count)| DayCount { date, count })
+            .collect(),
+        activity_last_30_days: activity_window(&stats.daily, now, 30)
+            .into_iter()
+            .map(|(date, count)| DayCount { date, count })
             .collect(),
     };
     serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
@@ -613,6 +758,7 @@ mod tests {
         let filters = Filters {
             project: Some("mnemo".to_string()),
             branch: None,
+            since: None,
         };
         let s = render_json(&stats, &filters, &["create_dir".to_string()]);
         let parsed: serde_json::Value = serde_json::from_str(&s).unwrap();
@@ -629,5 +775,53 @@ mod tests {
     fn nom_de_projet() {
         assert_eq!(project_name("/home/u/proj/mnemo"), "mnemo");
         assert_eq!(project_name("/home/u/proj/mnemo/"), "mnemo");
+    }
+
+    fn rec_shell(
+        command: &str,
+        shell: Option<&str>,
+        date: &str,
+        exit: Option<i64>,
+    ) -> CommandRecord {
+        CommandRecord {
+            id: 0,
+            command: command.to_string(),
+            cwd: None,
+            shell: shell.map(str::to_string),
+            hostname: None,
+            exit_code: exit,
+            created_at: date.to_string(),
+            git_root: None,
+            git_branch: None,
+            git_remote: None,
+            session_id: None,
+        }
+    }
+
+    #[test]
+    fn top_shells_et_taux_echec() {
+        let records = vec![
+            rec_shell("a", Some("bash"), "2026-06-10 10:00:00", Some(0)),
+            rec_shell("b", Some("bash"), "2026-06-10 11:00:00", Some(1)),
+            rec_shell("c", Some("zsh"), "2026-06-11 09:00:00", Some(0)),
+            rec_shell("d", None, "2026-06-11 09:30:00", Some(0)),
+        ];
+        let stats = compute(&records, &[]);
+        assert_eq!(stats.top_shells[0], ("bash".to_string(), 2));
+        assert_eq!(stats.failed, 1);
+        assert!((failure_rate(&stats) - 0.25).abs() < 1e-9);
+        // Activité regroupée par jour.
+        assert_eq!(stats.daily.len(), 2);
+    }
+
+    #[test]
+    fn activity_window_remplit_les_jours_vides() {
+        // 2026-06-18 12:00:00 UTC = 1781784000 secondes.
+        let today = 1_781_784_000u64;
+        let daily = vec![("2026-06-18".to_string(), 3)];
+        let window = activity_window(&daily, today, 7);
+        assert_eq!(window.len(), 7);
+        assert_eq!(window.last().unwrap(), &("2026-06-18".to_string(), 3));
+        assert_eq!(window.first().unwrap().1, 0);
     }
 }

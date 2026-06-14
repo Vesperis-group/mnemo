@@ -167,3 +167,45 @@ adossé à des tests automatisés (référencés entre parenthèses).
     est contrôlé côté client. La vérification de la provenance
     (`*.provenance.sigstore.json`) reste **manuelle** (documentée dans le
     README).
+
+## Produit / UX (v0.9)
+
+25. **La maintenance automatique est opt-in et protégée.**
+    `mnemo maintenance run` ne supprime **rien** tant que
+    `auto_prune_enabled = false` (valeur par défaut). Même activée, la purge
+    exige `--yes` (ou une confirmation interactive) ; `--dry-run` ne modifie
+    jamais la base, et une sauvegarde complète est créée avant suppression réelle
+    si `auto_backup_before_prune = true`.
+    (`src/maintenance.rs::tests::*`,
+    `tests/v6_product.rs::{maintenance_status_et_dry_run_sans_suppression,
+    maintenance_run_yes_supprime_les_anciennes}`)
+
+26. **La configuration n'est jamais écrasée sans sauvegarde.**
+    `mnemo config edit` sauvegarde l'ancienne config
+    (`config.toml.bak.AAAAMMJJ-HHMMSS`) avant toute modification, puis revalide
+    le résultat. `mnemo config validate` signale erreurs et avertissements sans
+    rien modifier.
+    (`src/config.rs::tests::*`,
+    `tests/v6_product.rs::{config_show_path_validate,
+    config_validate_detecte_une_erreur}`)
+
+27. **Les filtres de recherche tolèrent les entrées invalides.**
+    Une date `--since` / `--before` invalide (ou un `--since` de `stats`)
+    n'interrompt pas la commande : le filtre est ignoré avec un avertissement,
+    sans panique. Le format de sortie `--json` est **stable**.
+    (`src/db.rs::tests::query_filter_combine_les_criteres`,
+    `tests/v6_product.rs::{search_date_invalide_ne_panique_pas,
+    search_json_est_stable, stats_since_invalide_ne_panique_pas}`)
+
+28. **L'export compressé ne casse pas l'export existant.**
+    `--gzip` ajoute une variante `.json.gz` / `.csv.gz` ; sans `--gzip`, l'export
+    reste identique. Le contenu décompressé est conforme à l'export non
+    compressé.
+    (`src/export.rs::tests::{gzip_roundtrip_conserve_le_contenu,
+    gz_path_ajoute_extension_si_absente}`,
+    `tests/v6_product.rs::export_gzip_produit_un_fichier_valide`)
+
+29. **La TUI quitte toujours sur `Ctrl+C`.**
+    Quel que soit le mode (recherche, détails, filtres, confirmation),
+    `Ctrl+C` quitte l'application.
+    (`src/tui/events.rs::tests::ctrl_c_quitte_dans_tous_les_modes`)

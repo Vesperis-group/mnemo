@@ -249,8 +249,8 @@ fn render_footer(f: &mut Frame, area: Rect, app: &TuiApp) {
         .split(area);
 
     let hints = match app.mode {
-        TuiMode::Details => "Tab recherche · j/k naviguer · Entrée copier · d suppr · f filtres · ? aide · Esc/Ctrl+C quitter",
-        _ => "Tab focus · Entrée sélectionner · Ctrl+P/B/D filtrer · Ctrl+L clear · F1 aide · Esc/Ctrl+C quitter",
+        TuiMode::Details => "j/k naviguer · / recherche · y copier · e exporter · x suppr · f succès/échecs · p/b projet/branche · ? aide · Esc/Ctrl+C quitter",
+        _ => "Tab actions · Entrée sélectionner · Ctrl+P/B/D filtrer · Ctrl+L clear · F1 aide · Esc/Ctrl+C quitter",
     };
     f.render_widget(
         Paragraph::new(hints).style(Style::default().fg(Color::DarkGray)),

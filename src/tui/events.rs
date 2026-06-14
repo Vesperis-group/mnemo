@@ -90,13 +90,18 @@ fn map_common(code: KeyCode, mods: KeyModifiers, input_focus: bool) -> Action {
         KeyCode::Backspace if input_focus => Action::Backspace,
         KeyCode::Char(c) if input_focus => Action::Input(c),
         // Mode Details : raccourcis lettre (la frappe n'édite pas la requête).
+        KeyCode::Char('/') => Action::FocusSearch,
         KeyCode::Char('k') => Action::Up,
         KeyCode::Char('j') => Action::Down,
         KeyCode::Char('q') => Action::Quit,
-        KeyCode::Char('d') => Action::RequestDelete,
+        KeyCode::Char('d') | KeyCode::Char('x') => Action::RequestDelete,
         KeyCode::Char('r') => Action::Refresh,
-        KeyCode::Char('f') => Action::ToggleFilters,
-        KeyCode::Char('c') => Action::Copy,
+        KeyCode::Char('f') => Action::CycleStatusFilter,
+        KeyCode::Char('F') => Action::ToggleFilters,
+        KeyCode::Char('p') => Action::FilterProjectCurrent,
+        KeyCode::Char('b') => Action::FilterBranchCurrent,
+        KeyCode::Char('c') | KeyCode::Char('y') => Action::Copy,
+        KeyCode::Char('e') => Action::ExportResults,
         KeyCode::Char('?') => Action::ToggleHelp,
         _ => Action::None,
     }
@@ -140,6 +145,10 @@ mod tests {
             Action::RequestDelete
         );
         assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('x'), NONE),
+            Action::RequestDelete
+        );
+        assert_eq!(
             map_key(TuiMode::Details, KeyCode::Char('q'), NONE),
             Action::Quit
         );
@@ -148,8 +157,32 @@ mod tests {
             Action::Copy
         );
         assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('y'), NONE),
+            Action::Copy
+        );
+        assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('e'), NONE),
+            Action::ExportResults
+        );
+        assert_eq!(
             map_key(TuiMode::Details, KeyCode::Char('f'), NONE),
+            Action::CycleStatusFilter
+        );
+        assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('F'), NONE),
             Action::ToggleFilters
+        );
+        assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('p'), NONE),
+            Action::FilterProjectCurrent
+        );
+        assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('b'), NONE),
+            Action::FilterBranchCurrent
+        );
+        assert_eq!(
+            map_key(TuiMode::Details, KeyCode::Char('/'), NONE),
+            Action::FocusSearch
         );
         assert_eq!(
             map_key(TuiMode::Details, KeyCode::Char('r'), NONE),

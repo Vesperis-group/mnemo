@@ -32,6 +32,9 @@ commande.
 - [Installation manuelle](#installation-manuelle)
 - [Désinstallation](#désinstallation)
 - [Commandes disponibles](#commandes-disponibles)
+- [Recherche avancée](#recherche-avancée)
+- [Maintenance automatique](#maintenance-automatique)
+- [Configuration : `mnemo config`](#configuration--mnemo-config)
 - [Version : `mnemo version`](#version--mnemo-version)
 - [Intégration Bash](#intégration-bash)
 - [Diagnostic : `mnemo doctor`](#diagnostic--mnemo-doctor)
@@ -363,15 +366,18 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo search [requête]` | Ouvre la même TUI interactive ; la commande choisie est imprimée sur stdout. |
 | `mnemo search <requête> --print [--limit N]` | **Mode non interactif** : imprime les résultats sur stdout, sans TUI. |
 | `mnemo search --query <requête> --print` | Variante avec option explicite `--query`. |
-| `mnemo search <requête> [--project <nom>] [--branch <branche>]` | Filtre par contexte Git (projet / branche), compatible avec `--print` et la TUI. |
+| `mnemo search <requête> [--project <nom>] [--branch <branche>] [--exit-code <n>] [--failed] [--since <durée\|date>] [--before <date>] [--cwd <chemin>] [--shell <shell>] [--limit N] [--json]` | **Recherche avancée** : filtres combinables par contexte Git, code de sortie, date, répertoire, shell ; sortie JSON stable avec `--print --json`. |
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
-| `mnemo stats [--project <nom>] [--branch <branche>] [--json]` | Statistiques d'usage (totaux, projets Git, top commandes/dossiers/projets), filtrables et exportables en JSON. |
+| `mnemo stats [--project <nom>] [--branch <branche>] [--since <durée\|date>] [--json]` | Statistiques d'usage enrichies (totaux, taux d'échec, top commandes/dossiers/projets/shells, activité quotidienne), filtrables (dont `--project current`) et exportables en JSON. |
+| `mnemo project <current\|list>` | Affiche le projet courant (racine Git, marqueur de projet ou dossier) ou la liste des projets connus. |
+| `mnemo maintenance <status\|run>` | État du nettoyage automatique ; `run --dry-run` simule, `run --yes` applique (désactivé par défaut, sauvegarde avant purge). |
+| `mnemo config <show\|path\|edit\|validate>` | Affiche, localise, édite (`$EDITOR`, sauvegarde automatique) ou valide la configuration. |
 | `mnemo config stats-ignore <add\|remove\|list> [<cmd>]` | Gère les commandes exclues du « Top commandes » dans `mnemo stats`. |
 | `mnemo list [--limit N] [--project <nom>] [--branch <branche>] [--json]` | Affiche les dernières commandes avec leurs IDs (utile pour `mnemo delete`). |
 | `mnemo backup [--output <dossier>] [--json]` | Crée une sauvegarde locale complète (`.tar.gz`). |
 | `mnemo restore <archive> [--dry-run] [--yes]` | Restaure une sauvegarde après vérification, avec backup de sécurité. |
-| `mnemo export --format <json\|csv> [--project <nom>] [--branch <branche>] [--output <fichier>]` | Exporte les commandes (stdout par défaut). |
+| `mnemo export --format <json\|csv> [--project <nom>] [--branch <branche>] [--output <fichier>] [--gzip]` | Exporte les commandes (stdout par défaut) ; `--gzip` produit un `.json.gz` / `.csv.gz`. |
 | `mnemo delete <id> [--dry-run] [--yes]` | Supprime une commande par ID (confirmation + backup automatique). |
 | `mnemo prune --older-than <durée> [--project <nom>] [--branch <branche>] [--dry-run] [--yes]` | Nettoie les commandes anciennes (`30d`, `12w`, `6m`, `1y`). |
 | `mnemo doctor [--fix] [--json]` | Diagnostique l'installation et, avec `--fix`, répare les éléments manquants. |
@@ -409,8 +415,8 @@ mnemo tui --failed               # uniquement les commandes en échec
 
 - **Search** (par défaut) : la frappe édite la requête (recherche fuzzy en
   direct).
-- **Details** : focus liste, raccourcis d'une lettre actifs (`j`/`k`, `d`,
-  `r`, `f`, `c`, `?`, `q`).
+- **Details** : focus liste, raccourcis d'une lettre actifs (`j`/`k`, `/`,
+  `x`/`d`, `r`, `f`, `F`, `p`, `b`, `y`/`c`, `e`, `?`, `q`).
 
 `Tab` bascule entre les deux. `Esc` quitte partout. `F1` ouvre l'aide partout.
 
@@ -424,17 +430,21 @@ mnemo tui --failed               # uniquement les commandes en échec
 | `Entrée` | imprime la commande sélectionnée puis quitte |
 | `Esc` / `q` | quitter |
 | `Tab` | basculer le focus liste/détails |
+| `/` | revenir au focus recherche (depuis la liste) |
 | `r` | rafraîchir (recharge la base) |
-| `c` | copier la commande (presse-papiers système si dispo, sinon tampon interne) |
+| `y` / `c` | copier la commande (presse-papiers système si dispo, sinon tampon interne) |
+| `e` | exporter les résultats filtrés en JSON (`mnemo-export-<ts>.json`) |
 | `?` / `F1` | afficher/masquer l'aide |
-| `d` | supprimer la commande sélectionnée |
+| `x` / `d` | supprimer la commande sélectionnée |
 | `y` / `n` (`Esc`) | confirmer / annuler la suppression |
-| `f` | ouvrir/fermer le panneau de filtres |
+| `f` | faire défiler le statut (tous → succès → échecs) |
+| `p` / `b` | filtrer par le projet / la branche courant(e) |
+| `F` | ouvrir/fermer le panneau de filtres |
 | `Ctrl+P` / `Ctrl+B` / `Ctrl+D` | filtrer par projet / branche / dossier de la sélection |
 | `Ctrl+L` | effacer tous les filtres |
 | `Ctrl+C` | quitter (dans tous les modes) |
 
-Dans le panneau de filtres (`f`) : `p`/`b`/`w` (projet/branche/dossier depuis la
+Dans le panneau de filtres (`F`) : `p`/`b`/`w` (projet/branche/dossier depuis la
 sélection), `s` (statut : tous → succès → échecs), `c` (effacer).
 
 > **Note :** `Ctrl+C` quitte toujours l'application, quel que soit le mode.
@@ -684,6 +694,92 @@ respectés. Un backup automatique est créé avant toute suppression réelle.
 
 ---
 
+## Recherche avancée
+
+`mnemo search --print` accepte des filtres **combinables** pour interroger
+finement l'historique, sans TUI (idéal pour scripts et CI) :
+
+```bash
+mnemo search --print --failed                 # uniquement les commandes en échec
+mnemo search --print --exit-code 127          # code de sortie exact
+mnemo search docker --print --since 7d        # 7 derniers jours (durée)
+mnemo search --print --since 2026-01-01       # depuis une date (AAAA-MM-JJ)
+mnemo search --print --before 2026-06-01      # avant une date
+mnemo search --print --cwd /home/killian/mnemo
+mnemo search --print --shell bash
+mnemo search --print --project current        # projet du dossier courant
+mnemo search cargo --print --branch main --limit 50
+mnemo search --print --json                   # sortie JSON stable
+```
+
+- `--since` accepte une **durée** (`7d`, `2w`, `3m`, `1y`) ou une **date**
+  `AAAA-MM-JJ` ; `--before` attend une date. Une valeur de date **invalide**
+  n'interrompt pas la commande (le filtre est simplement ignoré, avec un
+  avertissement).
+- `--failed` et `--exit-code` sont mutuellement exclusifs.
+- `--project current` détecte automatiquement le projet du répertoire courant
+  (racine Git, marqueur de projet, ou nom du dossier).
+- `--json` (avec `--print`) produit un tableau d'objets au **format stable**
+  (mêmes champs que `mnemo export --format json`).
+
+Tous ces filtres sont également disponibles dans la **TUI** via les raccourcis
+(`f` statut, `p`/`b` projet/branche courant, `Ctrl+P/B/D` depuis la sélection).
+
+
+---
+
+## Maintenance automatique
+
+mnemo peut **nettoyer périodiquement** les commandes anciennes, de façon
+**opt-in** et toujours protégée. La configuration vit dans la section
+`[maintenance]` de `~/.config/mnemo/config.toml` :
+
+```toml
+[maintenance]
+auto_prune_enabled = false       # désactivé par défaut
+auto_prune_after = "180d"        # ancienneté au-delà de laquelle purger
+auto_backup_before_prune = true  # sauvegarde complète avant toute purge
+```
+
+```bash
+mnemo maintenance status         # affiche la config et le nombre d'entrées éligibles
+mnemo maintenance run --dry-run  # simule : montre ce qui serait supprimé, ne touche rien
+mnemo maintenance run --yes      # applique la purge (sauvegarde d'abord si configuré)
+```
+
+Garanties :
+
+- **Désactivé par défaut** : `mnemo maintenance run` ne supprime jamais rien
+  tant que `auto_prune_enabled = false`.
+- **Jamais de suppression silencieuse** : `run` exige `--yes` (ou une
+  confirmation interactive) ; `--dry-run` ne modifie jamais la base.
+- **Sauvegarde avant purge** : si `auto_backup_before_prune = true`, un backup
+  complet est créé avant toute suppression réelle.
+- `auto_prune_after` accepte les mêmes durées que `mnemo prune`
+  (`30d`, `12w`, `6m`, `1y`).
+
+
+---
+
+## Configuration : `mnemo config`
+
+```bash
+mnemo config show        # affiche la configuration effective (TOML)
+mnemo config path        # chemin du fichier config.toml
+mnemo config edit        # ouvre $EDITOR (repli nano/vi), avec sauvegarde préalable
+mnemo config validate    # valide la config (code 1 si erreur)
+```
+
+`mnemo config edit` crée une configuration par défaut si elle est absente,
+**sauvegarde** systématiquement l'ancienne version
+(`config.toml.bak.AAAAMMJJ-HHMMSS`) avant d'ouvrir l'éditeur, puis **revalide**
+le résultat. `mnemo config validate` signale les erreurs (par ex.
+`search_limit = 0`, `auto_prune_after` illisible) et les avertissements (clés
+inconnues). La configuration n'est **jamais** écrasée sans sauvegarde.
+
+
+---
+
 ## Version : `mnemo version`
 
 La commande `mnemo version` donne un aperçu complet du binaire en cours
@@ -769,14 +865,21 @@ Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]` ou `[INFO]`.
 
 ### Mode `--fix`
 
-`mnemo doctor --fix` :
+`mnemo doctor --fix` répare l'installation de façon **non destructive** :
 
+- crée les dossiers de configuration / données s'ils sont absents ;
 - crée la config si absente ;
 - crée la base si absente ;
-- ajoute le bloc mnemo au `.bashrc` si absent (**avec sauvegarde**, sans
-  doublon) ;
+- resserre les permissions trop permissives de la config et de la base
+  (`chmod 600`) ;
+- ajoute le bloc mnemo au `.bashrc` si absent, **supprime les doublons** et
+  **restaure le raccourci `Ctrl+R`** s'il a disparu (**toujours avec
+  sauvegarde** du `.bashrc` avant modification) ;
 - affiche un message clair si `~/.local/bin` n'est pas dans le `PATH` ;
 - **ne supprime jamais** de données.
+
+À la fin, un résumé indique le nombre de corrections appliquées
+(`Corrections appliquées : X`) ou `Aucune correction nécessaire`.
 
 ### Exemple de sortie
 
