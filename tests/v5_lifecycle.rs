@@ -69,6 +69,29 @@ fn make_archive(tag: &str, target: &str, script: &[u8]) -> Vec<u8> {
     builder.into_inner().unwrap().finish().unwrap()
 }
 
+/// Construit une archive `.tar.gz` malveillante dont l'entrée porte un chemin
+/// `entry_name` arbitraire (header écrit directement, contournant la validation
+/// du builder). Sert à vérifier le rejet du path traversal.
+fn make_evil_archive(entry_name: &str) -> Vec<u8> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    let data = b"evil";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(data.len() as u64);
+    header.set_mode(0o755);
+    header.set_entry_type(tar::EntryType::Regular);
+    {
+        let gnu = header.as_gnu_mut().unwrap();
+        let b = entry_name.as_bytes();
+        gnu.name[..b.len()].copy_from_slice(b);
+    }
+    header.set_cksum();
+    let enc = GzEncoder::new(Vec::new(), Compression::default());
+    let mut builder = tar::Builder::new(enc);
+    builder.append(&header, &data[..]).unwrap();
+    builder.into_inner().unwrap().finish().unwrap()
+}
+
 // --------------------------------------------------------------------------
 // Serveur HTTP de test (mono-thread, détaché, jamais Internet).
 // --------------------------------------------------------------------------
@@ -499,4 +522,43 @@ fn upgrade_erreur_reseau_propre() {
         before,
         "binaire intact après échec"
     );
+}
+
+#[test]
+fn upgrade_refuse_path_traversal() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+    let bin = fake_bin(home);
+    let before = std::fs::read(&bin).unwrap();
+
+    // Archive malveillante (chemin `../evil`), mais avec un SHA-256 VALIDE : on
+    // vérifie que la vérification d'intégrité passe puis que l'extraction
+    // refuse le path traversal - sans remplacer le binaire.
+    let archive = make_evil_archive("../evil-upgrade.txt");
+    let base = start_server(release_routes("v99.0.0", TARGET, &archive, None));
+
+    let mut cmd = mnemo(home);
+    with_mock(&mut cmd, &base);
+    let out = cmd
+        .args([
+            "upgrade",
+            "--yes",
+            "--version",
+            "v99.0.0",
+            "--target",
+            TARGET,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !out.status.success(),
+        "upgrade doit refuser une archive avec path traversal"
+    );
+    assert_eq!(
+        std::fs::read(&bin).unwrap(),
+        before,
+        "binaire intact après rejet"
+    );
+    assert!(!std::env::temp_dir().join("evil-upgrade.txt").exists());
 }

@@ -126,8 +126,8 @@ fn extract_targz(bytes: &[u8], dest: &Path) -> Result<()> {
     use flate2::read::GzDecoder;
     use tar::Archive;
     let decoder = GzDecoder::new(bytes);
-    let mut archive = Archive::new(decoder);
-    archive.unpack(dest)?;
+    let archive = Archive::new(decoder);
+    crate::archive::safe_unpack(archive, dest)?;
     Ok(())
 }
 

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Permissions minimales : lecture seule du dépôt.
+permissions:
+  contents: read
+
 # Annule les exécutions précédentes encore en cours sur la même réf.
 concurrency:
   group: ci-${{ github.ref }}

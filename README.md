@@ -922,8 +922,16 @@ search_limit = 5000
 
 ## Sécurité & confidentialité
 
-- **100 % local.** Aucune donnée ne quitte la machine : pas de serveur, pas de
-  synchronisation cloud, aucun appel réseau.
+- **Local-first.** Vos données d'historique ne quittent jamais la machine : pas
+  de serveur, pas de synchronisation cloud. Les seules connexions réseau
+  possibles sont **explicites et déclenchées par vous** : `mnemo update` et
+  `mnemo upgrade` contactent l'API GitHub en HTTPS pour vérifier/télécharger une
+  release. `mnemo doctor` est **hors-ligne par défaut**.
+- **Téléchargements vérifiés.** `mnemo upgrade` télécharge l'archive **et** son
+  empreinte `SHA-256`, vérifie la correspondance **avant** extraction, puis
+  décompresse via un extracteur durci contre le *path traversal* (voir
+  [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)). Aucun script distant n'est
+  jamais exécuté.
 - **Filtrage des secrets.** Toute commande contenant `password`, `passwd`,
   `token`, `secret`, `api_key`, `bearer`, `private_key` ou `sshpass` est
   ignorée à l'import comme à l'ajout. La liste est personnalisable.
@@ -932,13 +940,38 @@ search_limit = 5000
 - **Pas de modification destructive sans sauvegarde.** Les scripts
   d'installation/désinstallation sauvegardent `~/.bashrc` avant toute
   modification (`~/.bashrc.mnemo.bak.YYYYMMDD-HHMMSS`) et ne suppriment jamais
-  les données sans confirmation.
+  les données sans confirmation. La restauration crée une sauvegarde de sûreté
+  avant de remplacer la base.
 - **Permissions.** La base reste dans votre répertoire utilisateur. Pensez à la
   protéger si votre historique contient des informations sensibles
   (`chmod 600 ~/.local/share/mnemo/history.db`).
 
 > ℹ️ Le filtrage par mots-clés est une protection « best-effort », pas une
 > garantie absolue. Vérifiez votre historique si vous manipulez des secrets.
+
+### DevSecOps et chaîne d'approvisionnement
+
+mnemo est outillé comme un vrai projet DevSecOps :
+
+- **Invariants & threat model** documentés dans
+  [docs/INVARIANTS.md](docs/INVARIANTS.md) (garanties testées) et
+  [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) (actifs, menaces M1–M9,
+  mitigations, risques résiduels).
+- **Portes de qualité locales** :
+
+  ```bash
+  make check          # fmt --check + clippy -D warnings + tests
+  make audit          # cargo audit / deny / machete + gitleaks (si installés)
+  make release-check  # porte complète : lint + tests + build release + musl
+                      # + bash -n scripts + release-it --dry-run
+  ```
+
+- **CI/CD** : `ci.yml` (fmt/clippy/test/build, permissions en lecture seule),
+  `audit.yml` (cargo-audit, cargo-deny, cargo-machete, gitleaks sur PR et push
+  main), `release.yml` (release automatique au merge, permissions scopées).
+- **Politique des dépendances** dans [deny.toml](deny.toml) : licences
+  permissives autorisées uniquement, refus des vulnérabilités RustSec, contrôle
+  des sources.
 
 ---
 
@@ -1218,6 +1251,9 @@ make release    # cargo build --release
 make test       # cargo test (unitaires + intégration scripts/CLI)
 make lint       # cargo fmt --check + clippy -D warnings
 make fmt        # cargo fmt
+make check      # fmt --check + clippy + tests (avant commit)
+make audit      # cargo audit / deny / machete + gitleaks (si installés)
+make release-check  # porte de qualité complète avant release
 make clean      # cargo clean
 make help       # liste des cibles
 ```
@@ -1242,7 +1278,9 @@ Couverture des tests :
 - diagnostic `doctor` : HOME sain, config/base absente, base corrompue,
   `--fix`, `--json`, codes retour (`tests/doctor.rs`) ;
 - syntaxe des scripts (`bash -n`), idempotence et sauvegarde du `.bashrc`
-  (`tests/scripts.rs`).
+  (`tests/scripts.rs`) ;
+- extraction d'archives durcie contre le *path traversal* (`archive`,
+  `tests/v3_data_management.rs`, `tests/v5_lifecycle.rs`).
 
 ---
 
