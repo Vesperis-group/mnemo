@@ -497,3 +497,78 @@ fn prune_duree_invalide_echoue() {
     let out = run(home, &["prune", "--older-than", "30x", "--yes"]);
     assert!(!out.status.success());
 }
+
+// ---------------------------------------------------------------------------
+// broken pipe (v0.3.1)
+// ---------------------------------------------------------------------------
+
+/// Exécute `mnemo <args>` et redirige sa sortie standard vers `head -n <lines>`,
+/// puis renvoie `(code de sortie de mnemo, stderr de mnemo)`.
+///
+/// `head` ferme le tube après avoir lu assez de lignes : mnemo doit alors
+/// s'arrêter silencieusement (code 0) sans afficher « Broken pipe ».
+fn pipe_through_head(home: &Path, args: &[&str], lines: usize) -> (i32, String) {
+    let mut child = mnemo(home)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mnemo_stdout: Stdio = child.stdout.take().unwrap().into();
+    let head = Command::new("head")
+        .args(["-n", &lines.to_string()])
+        .stdin(mnemo_stdout)
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    // On attend la fin de `head` d'abord (il ferme le tube), puis celle de mnemo.
+    let _ = head.wait_with_output().unwrap();
+    let out = child.wait_with_output().unwrap();
+    let code = out.status.code().unwrap_or(-1);
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    (code, stderr)
+}
+
+#[test]
+fn export_json_pipe_vers_head_ne_casse_pas() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let commands: Vec<String> = (1..=200).map(|i| format!("commande numero {i}")).collect();
+    let refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
+    setup(home, &refs);
+
+    let (code, stderr) = pipe_through_head(home, &["export", "--format", "json"], 20);
+    assert_eq!(code, 0, "mnemo doit sortir proprement (stderr: {stderr})");
+    assert!(
+        !stderr.to_lowercase().contains("broken pipe"),
+        "stderr ne doit pas mentionner broken pipe: {stderr}"
+    );
+}
+
+#[test]
+fn export_csv_pipe_vers_head_ne_casse_pas() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let commands: Vec<String> = (1..=200).map(|i| format!("commande numero {i}")).collect();
+    let refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
+    setup(home, &refs);
+
+    let (code, stderr) = pipe_through_head(home, &["export", "--format", "csv"], 5);
+    assert_eq!(code, 0, "mnemo doit sortir proprement (stderr: {stderr})");
+    assert!(!stderr.to_lowercase().contains("broken pipe"), "{stderr}");
+}
+
+#[test]
+fn list_pipe_vers_head_ne_casse_pas() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let commands: Vec<String> = (1..=200).map(|i| format!("commande numero {i}")).collect();
+    let refs: Vec<&str> = commands.iter().map(|s| s.as_str()).collect();
+    setup(home, &refs);
+
+    let (code, stderr) = pipe_through_head(home, &["list", "--limit", "200"], 5);
+    assert_eq!(code, 0, "mnemo doit sortir proprement (stderr: {stderr})");
+    assert!(!stderr.to_lowercase().contains("broken pipe"), "{stderr}");
+}

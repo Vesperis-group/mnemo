@@ -418,6 +418,22 @@ L'export JSON produit un tableau d'objets (tous les champs : `id`, `command`,
 virgules, guillemets et sauts de ligne). Sans `--output`, l'export va sur
 stdout. Les filtres `--project` / `--branch` s'appliquent comme pour `search`.
 
+Les sorties sur stdout (`export`, `list`, `stats`) peuvent être enchaînées avec
+les outils Unix habituels sans déclencher d'erreur « Broken pipe » : mnemo
+s'arrête alors silencieusement.
+
+```bash
+mnemo export --format json | head -20
+mnemo export --format csv | head -5
+mnemo export --format json | jq '.[0]'
+mnemo list --limit 100 | less
+
+# Pour conserver l'export complet dans un fichier puis l'inspecter :
+mnemo export --format json --output mnemo-export.json
+head -20 mnemo-export.json
+```
+
+
 ### Lister et supprimer
 
 ```bash
