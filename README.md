@@ -971,7 +971,9 @@ mnemo est outillé comme un vrai projet DevSecOps :
   main), `release.yml` (release automatique au merge, permissions scopées).
 - **Politique des dépendances** dans [deny.toml](deny.toml) : licences
   permissives autorisées uniquement, refus des vulnérabilités RustSec, contrôle
-  des sources.
+  des sources. `RUSTSEC-2024-0436` (`paste`) est accepté temporairement car
+  transitif via `ratatui` (advisory `unmaintained`, pas une vulnérabilité
+  active) ; suivi pour suppression lors d'une mise à jour future de Ratatui.
 
 ---
 

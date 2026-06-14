@@ -125,3 +125,10 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 - Chaîne DevSecOps : `cargo audit`, `cargo deny`, `cargo machete`, `gitleaks`
   (cf. `Makefile` cible `audit` et `.github/workflows/audit.yml`).
 - Clippy en mode `-D warnings`, pas d'`unsafe` dans le code applicatif.
+
+### Exceptions de supply chain documentées
+
+- `RUSTSEC-2024-0436` (`paste`) est accepté temporairement : il s'agit d'une
+  dépendance transitive via `ratatui`, signalée `unmaintained` (pas une
+  vulnérabilité active). Suivi pour suppression lors d'une mise à jour future
+  de Ratatui. Voir `deny.toml`, section `[advisories].ignore`.
