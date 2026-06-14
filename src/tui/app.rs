@@ -68,51 +68,61 @@ impl TuiFilters {
 
 /// Indicateurs agrégés affichés dans la barre de synthèse (« overview »).
 ///
-/// `success` / `failed` sont calculés sur les commandes **visibles** (après
-/// filtres), tandis que `total` reflète l'ensemble chargé en mémoire et
-/// `projects` le nombre de projets distincts toutes commandes confondues.
+/// Tous les indicateurs hormis `total` sont calculés sur les commandes
+/// **visibles** (après recherche et filtres). `total` reflète l'ensemble
+/// chargé en mémoire avant filtres. Les compteurs sont cohérents :
+/// `success + failed == visible`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Overview {
-    /// Nombre total de commandes chargées.
+    /// Nombre total de commandes chargées (avant filtres).
     pub total: usize,
     /// Commandes visibles après filtres et recherche.
     pub visible: usize,
-    /// Visibles terminées en succès (`exit_code == 0`).
+    /// Visibles n'ayant pas échoué (`exit_code == 0` ou inconnu).
     pub success: usize,
     /// Visibles terminées en échec (`exit_code` présent et ≠ 0).
     pub failed: usize,
-    /// Projets Git distincts (sur l'ensemble chargé).
+    /// Projets Git distincts parmi les commandes visibles.
     pub projects: usize,
-    /// Shell dominant sur l'ensemble chargé, le cas échéant.
+    /// Shell dominant parmi les commandes visibles, le cas échéant.
     pub top_shell: Option<String>,
 }
 
 impl Overview {
     /// Calcule les indicateurs à partir des commandes et des indices visibles.
+    ///
+    /// Seuls les indices présents dans `filtered` (les commandes visibles)
+    /// alimentent `visible`, `success`, `failed`, `projects` et `top_shell`.
+    /// `total` reste l'ensemble chargé. Un échec est une commande dont le
+    /// `exit_code` est présent et différent de zéro ; tout le reste (succès
+    /// explicite ou statut inconnu) compte comme succès, de sorte que
+    /// `success + failed == visible`.
     pub fn compute(records: &[CommandRecord], filtered: &[usize]) -> Self {
-        let mut success = 0usize;
+        let visible = filtered.len();
+
         let mut failed = 0usize;
         for &idx in filtered {
-            match records[idx].exit_code {
-                Some(0) => success += 1,
-                Some(_) => failed += 1,
-                None => {}
+            if let Some(code) = records[idx].exit_code {
+                if code != 0 {
+                    failed += 1;
+                }
             }
         }
+        let success = visible - failed;
 
-        let mut projects: Vec<&str> = records
+        let mut projects: Vec<&str> = filtered
             .iter()
-            .filter_map(|r| r.git_root.as_deref().filter(|s| !s.is_empty()))
+            .filter_map(|&idx| records[idx].git_root.as_deref().filter(|s| !s.is_empty()))
             .map(last_segment)
             .collect();
         projects.sort_unstable();
         projects.dedup();
 
-        let top_shell = dominant_shell(records);
+        let top_shell = dominant_shell(filtered.iter().map(|&idx| &records[idx]));
 
         Self {
             total: records.len(),
-            visible: filtered.len(),
+            visible,
             success,
             failed,
             projects: projects.len(),
@@ -120,22 +130,21 @@ impl Overview {
         }
     }
 
-    /// Taux d'échec parmi les commandes visibles ayant un statut connu (0.0 à
-    /// 100.0). Renvoie `0.0` si aucune commande exécutée n'est visible.
+    /// Taux d'échec parmi les commandes **visibles** (0.0 à 100.0).
+    /// Renvoie `0.0` si aucune commande n'est visible.
     pub fn failure_rate(&self) -> f64 {
-        let executed = self.success + self.failed;
-        if executed == 0 {
+        if self.visible == 0 {
             0.0
         } else {
-            (self.failed as f64 / executed as f64) * 100.0
+            (self.failed as f64 / self.visible as f64) * 100.0
         }
     }
 }
 
-/// Détermine le shell le plus fréquent parmi les commandes (ignorant les
-/// valeurs absentes). En cas d'égalité, renvoie l'un des shells à fréquence
+/// Détermine le shell le plus fréquent parmi les commandes fournies (ignorant
+/// les valeurs absentes). En cas d'égalité, renvoie l'un des shells à fréquence
 /// maximale de façon déterministe pour un même jeu de données.
-fn dominant_shell(records: &[CommandRecord]) -> Option<String> {
+fn dominant_shell<'a>(records: impl Iterator<Item = &'a CommandRecord>) -> Option<String> {
     use std::collections::HashMap;
     let mut counts: HashMap<&str, usize> = HashMap::new();
     let mut order: Vec<&str> = Vec::new();
@@ -756,7 +765,7 @@ mod tests {
         // git_root distincts : mnemo + other.
         assert_eq!(ov.projects, 2);
         assert_eq!(ov.top_shell.as_deref(), Some("bash"));
-        // 2 échecs sur 5 exécutées = 40 %.
+        // 2 échecs sur 5 visibles = 40 %.
         assert!((ov.failure_rate() - 40.0).abs() < 1e-9);
     }
 
@@ -765,6 +774,9 @@ mod tests {
         let ov = Overview::compute(&[], &[]);
         assert_eq!(ov.total, 0);
         assert_eq!(ov.visible, 0);
+        assert_eq!(ov.success, 0);
+        assert_eq!(ov.failed, 0);
+        assert_eq!(ov.projects, 0);
         assert_eq!(ov.failure_rate(), 0.0);
         assert!(ov.top_shell.is_none());
     }
@@ -778,6 +790,115 @@ mod tests {
         assert_eq!(ov.visible, 3, "seuls les succès sont visibles");
         assert_eq!(ov.failed, 0);
         assert_eq!(ov.success, 3);
+        assert!((ov.failure_rate() - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overview_taux_echec_huit_succes_deux_echecs() {
+        // 10 commandes : 8 succès, 2 échecs -> 20.0 %.
+        let mut records: Vec<CommandRecord> = (0..10).map(|i| rec(i, "cmd")).collect();
+        records[3].exit_code = Some(1);
+        records[7].exit_code = Some(130);
+        let all: Vec<usize> = (0..records.len()).collect();
+        let ov = Overview::compute(&records, &all);
+        assert_eq!(ov.visible, 10);
+        assert_eq!(ov.success, 8);
+        assert_eq!(ov.failed, 2);
+        assert!((ov.failure_rate() - 20.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overview_toutes_en_echec_donne_100_pour_cent() {
+        let records: Vec<CommandRecord> = (0..4)
+            .map(|i| {
+                let mut r = rec(i, "boom");
+                r.exit_code = Some(1);
+                r
+            })
+            .collect();
+        let all: Vec<usize> = (0..records.len()).collect();
+        let ov = Overview::compute(&records, &all);
+        assert_eq!(ov.success, 0);
+        assert_eq!(ov.failed, 4);
+        assert!((ov.failure_rate() - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overview_toutes_en_succes_donne_0_pour_cent() {
+        let records: Vec<CommandRecord> = (0..4).map(|i| rec(i, "ok")).collect();
+        let all: Vec<usize> = (0..records.len()).collect();
+        let ov = Overview::compute(&records, &all);
+        assert_eq!(ov.success, 4);
+        assert_eq!(ov.failed, 0);
+        assert!((ov.failure_rate() - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overview_exit_inconnu_compte_comme_succes() {
+        // Régression : un grand nombre de statuts inconnus (NULL en base) ne
+        // doit pas faire chuter « Succès » ni gonfler le taux d'échec. Le taux
+        // se calcule sur l'ensemble visible, pas seulement les commandes au
+        // statut connu.
+        let mut records: Vec<CommandRecord> = (0..1241)
+            .map(|i| {
+                let mut r = rec(i, "legacy");
+                r.exit_code = None; // statut inconnu (NULL)
+                r
+            })
+            .collect();
+        // 6 échecs avérés, 75 succès explicites, le reste inconnu.
+        for r in records.iter_mut().take(6) {
+            r.exit_code = Some(1);
+        }
+        for r in records.iter_mut().skip(6).take(75) {
+            r.exit_code = Some(0);
+        }
+        let all: Vec<usize> = (0..records.len()).collect();
+        let ov = Overview::compute(&records, &all);
+        assert_eq!(ov.total, 1241);
+        assert_eq!(ov.visible, 1241);
+        assert_eq!(ov.failed, 6);
+        assert_eq!(
+            ov.success, 1235,
+            "succès = visibles - échecs (inconnu = succès)"
+        );
+        assert_eq!(
+            ov.success + ov.failed,
+            ov.visible,
+            "succès + échecs == visibles"
+        );
+        assert!((ov.failure_rate() - (6.0 / 1241.0 * 100.0)).abs() < 1e-9);
+        assert!(ov.failure_rate() < 1.0, "taux ~0,5 % et non ~7,4 %");
+    }
+
+    #[test]
+    fn overview_projets_et_shell_sur_visibles_seulement() {
+        // Un filtre qui ne laisse voir que le projet « other » ne doit compter
+        // qu'un seul projet et le shell des commandes visibles.
+        let mut records = sample();
+        records[2].shell = Some("zsh".to_string()); // git status, projet other
+                                                    // Visibles : uniquement l'index 2 (projet other, shell zsh).
+        let ov = Overview::compute(&records, &[2]);
+        assert_eq!(ov.total, 5, "total inchangé");
+        assert_eq!(ov.visible, 1);
+        assert_eq!(ov.projects, 1, "un seul projet visible");
+        assert_eq!(ov.top_shell.as_deref(), Some("zsh"));
+    }
+
+    #[test]
+    fn overview_sans_shell_ni_projet_ne_panique_pas() {
+        let mut records: Vec<CommandRecord> = (0..3).map(|i| rec(i, "x")).collect();
+        for r in records.iter_mut() {
+            r.shell = None;
+            r.git_root = None;
+            r.exit_code = Some(-1); // code atypique
+        }
+        let all: Vec<usize> = (0..records.len()).collect();
+        let ov = Overview::compute(&records, &all);
+        assert_eq!(ov.projects, 0);
+        assert!(ov.top_shell.is_none());
+        assert_eq!(ov.failed, 3, "exit_code négatif compte comme échec");
+        assert!((ov.failure_rate() - 100.0).abs() < 1e-9);
     }
 
     #[test]

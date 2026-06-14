@@ -643,9 +643,35 @@ mod tests {
         terminal.draw(|f| render(f, app)).unwrap();
     }
 
+    /// Rend l'app et renvoie le texte concaténé du buffer (pour vérifier la
+    /// présence de libellés).
+    fn render_text(width: u16, height: u16, app: &mut TuiApp) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render(f, app)).unwrap();
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|c| c.symbol())
+            .collect()
+    }
+
     #[test]
     fn rendu_dimensions_standard_sans_panique() {
         render_at(120, 40, &mut app());
+    }
+
+    #[test]
+    fn rendu_synthese_affiche_les_libelles_kpi() {
+        let text = render_text(120, 40, &mut app());
+        assert!(text.contains("Synthèse"));
+        assert!(text.contains("Total"));
+        assert!(text.contains("Visibles"));
+        assert!(text.contains("Succès"));
+        assert!(text.contains("Échecs"));
+        assert!(text.contains("Taux d'échec"));
     }
 
     #[test]
