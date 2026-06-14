@@ -16,7 +16,6 @@ use clap::Parser;
 use std::path::PathBuf;
 
 use cli::{Cli, Command};
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -49,6 +48,7 @@ fn main() -> Result<()> {
             let code = doctor::run(fix, json)?;
             std::process::exit(code);
         }
+        Command::Config { action } => cmd_config(action),
         Command::Version => {
             version::run();
             Ok(())
@@ -191,6 +191,52 @@ fn cmd_migrate() -> Result<()> {
         println!("Schéma migré : v{} -> v{}", outcome.from, outcome.to);
     } else {
         println!("Schéma déjà à jour : v{} (aucune migration)", outcome.to);
+    }
+    Ok(())
+}
+
+/// Sous-commande `mnemo config …` : gestion de la configuration locale.
+fn cmd_config(action: cli::ConfigCommand) -> Result<()> {
+    match action {
+        cli::ConfigCommand::StatsIgnore { action } => cmd_config_stats_ignore(action),
+    }
+}
+
+fn cmd_config_stats_ignore(action: cli::StatsIgnoreCommand) -> Result<()> {
+    use cli::StatsIgnoreCommand;
+
+    let path = config::config_path()?;
+    let mut cfg = config::Config::load()?;
+
+    match action {
+        StatsIgnoreCommand::Add { name } => {
+            let normalized = config::Config::normalize_ignored(&name);
+            if cfg.add_ignored_command(&name) {
+                cfg.save(&path)?;
+                println!("Commande ignorée ajoutée : {normalized}");
+            } else {
+                println!("Commande déjà présente : {normalized}");
+            }
+        }
+        StatsIgnoreCommand::Remove { name } => {
+            let normalized = config::Config::normalize_ignored(&name);
+            if cfg.remove_ignored_command(&name) {
+                cfg.save(&path)?;
+                println!("Commande retirée : {normalized}");
+            } else {
+                println!("Commande absente : {normalized}");
+            }
+        }
+        StatsIgnoreCommand::List => {
+            if cfg.stats.ignored_commands.is_empty() {
+                println!("Aucune commande ignorée configurée.");
+            } else {
+                println!("Commandes ignorées dans stats :");
+                for c in &cfg.stats.ignored_commands {
+                    println!("  {c}");
+                }
+            }
+        }
     }
     Ok(())
 }

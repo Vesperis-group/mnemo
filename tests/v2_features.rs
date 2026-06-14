@@ -267,3 +267,117 @@ fn stats_json_est_valide_et_filtre() {
         assert!(stdout(&none).contains("Aucune commande trouvée pour ces filtres."));
     }
 }
+
+#[test]
+fn init_cree_la_section_stats() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    assert!(run(home, &["init"]).status.success());
+    let cfg = std::fs::read_to_string(home.join(".config/mnemo/config.toml")).unwrap();
+    assert!(cfg.contains("[stats]"), "{cfg:?}");
+    assert!(cfg.contains("ignored_commands"), "{cfg:?}");
+}
+
+#[test]
+fn config_sans_section_stats_reste_compatible() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    // Écrit une config « ancienne » sans section [stats].
+    let cfg_dir = home.join(".config/mnemo");
+    std::fs::create_dir_all(&cfg_dir).unwrap();
+    std::fs::write(
+        cfg_dir.join("config.toml"),
+        "sensitive_keywords = [\"password\"]\nignore_prefixes = [\"mnemo\"]\nsearch_limit = 5000\n",
+    )
+    .unwrap();
+
+    // stats et list doivent fonctionner sans erreur.
+    let out = run(home, &["config", "stats-ignore", "list"]);
+    assert!(out.status.success(), "{:?}", out);
+    assert!(stdout(&out).contains("Aucune commande ignorée configurée."));
+}
+
+#[test]
+fn config_stats_ignore_add_remove_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    assert!(run(home, &["init"]).status.success());
+
+    // Liste vide au départ.
+    let list0 = run(home, &["config", "stats-ignore", "list"]);
+    assert!(stdout(&list0).contains("Aucune commande ignorée configurée."));
+
+    // Ajout.
+    let add = run(home, &["config", "stats-ignore", "add", "create_dir"]);
+    assert!(add.status.success());
+    assert!(stdout(&add).contains("Commande ignorée ajoutée : create_dir"));
+
+    // Ajout idempotent (pas de doublon).
+    let add2 = run(home, &["config", "stats-ignore", "add", "create_dir"]);
+    assert!(stdout(&add2).contains("Commande déjà présente : create_dir"));
+
+    // Liste contient la commande.
+    let list1 = run(home, &["config", "stats-ignore", "list"]);
+    assert!(stdout(&list1).contains("create_dir"));
+
+    // La config ne contient qu'une seule occurrence.
+    let cfg = std::fs::read_to_string(home.join(".config/mnemo/config.toml")).unwrap();
+    assert_eq!(cfg.matches("create_dir").count(), 1, "{cfg:?}");
+
+    // Retrait.
+    let rm = run(home, &["config", "stats-ignore", "remove", "create_dir"]);
+    assert!(stdout(&rm).contains("Commande retirée : create_dir"));
+
+    // Retrait d'une commande absente.
+    let rm2 = run(home, &["config", "stats-ignore", "remove", "create_dir"]);
+    assert!(stdout(&rm2).contains("Commande absente : create_dir"));
+}
+
+#[test]
+fn stats_respecte_la_config_ignored_commands() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    assert!(run(home, &["init"]).status.success());
+    for args in [
+        vec!["add", "--cmd", "create_dir foo", "--cwd", "/tmp"],
+        vec!["add", "--cmd", "create_dir bar", "--cwd", "/tmp"],
+        vec!["add", "--cmd", "cargo build", "--cwd", "/tmp"],
+    ] {
+        assert!(run(home, &args).status.success());
+    }
+
+    // Avant config : create_dir apparaît dans le Top.
+    assert!(stdout(&run(home, &["stats"])).contains("create_dir"));
+
+    // On ignore create_dir.
+    assert!(run(home, &["config", "stats-ignore", "add", "create_dir"])
+        .status
+        .success());
+
+    let out = run(home, &["stats"]);
+    assert!(out.status.success());
+    let s = stdout(&out);
+    // create_dir n'apparaît plus dans le Top commandes…
+    assert!(!s.contains("  create_dir"), "{s:?}");
+    // …mais cargo reste présent et le total est inchangé.
+    assert!(s.contains("cargo"), "{s:?}");
+    assert!(s.contains("Commandes enregistrées : 3"), "{s:?}");
+    assert!(
+        s.contains("Entrées ignorées dans le Top commandes : 2"),
+        "{s:?}"
+    );
+
+    // JSON expose la config.
+    let js = run(home, &["stats", "--json"]);
+    let v: serde_json::Value = serde_json::from_str(&stdout(&js)).unwrap();
+    assert_eq!(v["ignored_commands_config"][0], "create_dir");
+    assert_eq!(v["ignored_for_top_commands"], 2);
+
+    // doctor signale la commande ignorée.
+    let doc = run(home, &["doctor"]);
+    assert!(stdout(&doc).contains("Commandes ignorées dans stats : create_dir"));
+}
