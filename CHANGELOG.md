@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.8.0](https://github.com/Vesperis-group/mnemo/compare/v0.7.0...v0.8.0) (2026-06-14)
+
+### Features
+
+* vérifie les signatures Sigstore à l'upgrade et à l'installation ([354ce63](https://github.com/Vesperis-group/mnemo/commit/354ce636f8457a07ae98a7f672dddb327f2c92f6))
+
 ## [0.7.0](https://github.com/Vesperis-group/mnemo/compare/v0.6.3...v0.7.0) (2026-06-14)
 
 ### Features
