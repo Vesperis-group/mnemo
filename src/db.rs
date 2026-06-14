@@ -246,6 +246,96 @@ pub fn count(conn: &Connection) -> Result<i64> {
     Ok(n)
 }
 
+/// Récupère une commande par son identifiant, ou `None` si absente.
+pub fn get_command(conn: &Connection, id: i64) -> Result<Option<CommandRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map([id], row_to_record)?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+/// Supprime une commande par identifiant, dans une transaction. Renvoie le
+/// nombre de lignes effectivement supprimées (0 si l'ID n'existait pas).
+pub fn delete_command(conn: &Connection, id: i64) -> Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+    let n = tx.execute("DELETE FROM commands WHERE id = ?1", [id])?;
+    tx.commit()?;
+    Ok(n)
+}
+
+/// Compte les commandes plus anciennes que `cutoff` (format `YYYY-MM-DD
+/// HH:MM:SS`), en respectant le filtre de contexte Git.
+pub fn count_older_than(conn: &Connection, cutoff: &str, filter: &SearchFilter) -> Result<i64> {
+    let project_suffix = filter.project.as_ref().map(|p| format!("%/{p}"));
+    let n = conn.query_row(
+        "SELECT COUNT(*) FROM commands
+         WHERE created_at < ?1
+           AND (?2 IS NULL OR git_branch = ?2)
+           AND (?3 IS NULL OR git_root = ?3 OR git_root LIKE ?4)",
+        rusqlite::params![cutoff, filter.branch, filter.project, project_suffix],
+        |row| row.get(0),
+    )?;
+    Ok(n)
+}
+
+/// Charge un échantillon de commandes plus anciennes que `cutoff` (les plus
+/// récentes d'abord), pour prévisualiser un `prune`.
+pub fn fetch_older_than(
+    conn: &Connection,
+    cutoff: &str,
+    filter: &SearchFilter,
+    limit: usize,
+) -> Result<Vec<CommandRecord>> {
+    let project_suffix = filter.project.as_ref().map(|p| format!("%/{p}"));
+    let mut stmt = conn.prepare(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands
+         WHERE created_at < ?1
+           AND (?2 IS NULL OR git_branch = ?2)
+           AND (?3 IS NULL OR git_root = ?3 OR git_root LIKE ?4)
+         ORDER BY created_at DESC, id DESC
+         LIMIT ?5",
+    )?;
+    let rows = stmt.query_map(
+        rusqlite::params![
+            cutoff,
+            filter.branch,
+            filter.project,
+            project_suffix,
+            limit as i64
+        ],
+        row_to_record,
+    )?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Supprime les commandes plus anciennes que `cutoff` (en respectant le filtre
+/// Git), dans une transaction. Renvoie le nombre de lignes supprimées.
+pub fn delete_older_than(conn: &Connection, cutoff: &str, filter: &SearchFilter) -> Result<usize> {
+    let project_suffix = filter.project.as_ref().map(|p| format!("%/{p}"));
+    let tx = conn.unchecked_transaction()?;
+    let n = tx.execute(
+        "DELETE FROM commands
+         WHERE created_at < ?1
+           AND (?2 IS NULL OR git_branch = ?2)
+           AND (?3 IS NULL OR git_root = ?3 OR git_root LIKE ?4)",
+        rusqlite::params![cutoff, filter.branch, filter.project, project_suffix],
+    )?;
+    tx.commit()?;
+    Ok(n)
+}
+
 /// Horodatage courant au format `YYYY-MM-DD HH:MM:SS` (UTC).
 pub fn now_timestamp() -> String {
     let secs = SystemTime::now()
