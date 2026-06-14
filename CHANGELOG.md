@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.9.0](https://github.com/Vesperis-group/mnemo/compare/v0.8.0...v0.9.0) (2026-06-14)
+
+### Features
+
+* ameliore l'experience produit de mnemo ([b5bea4a](https://github.com/Vesperis-group/mnemo/commit/b5bea4a06d22412e4ee76085799109e099c82cb5))
+
 ## [0.8.0](https://github.com/Vesperis-group/mnemo/compare/v0.7.0...v0.8.0) (2026-06-14)
 
 ### Features
