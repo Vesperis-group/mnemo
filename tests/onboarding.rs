@@ -93,6 +93,46 @@ fn wizard_yes_est_idempotent_et_non_destructif() {
 }
 
 #[test]
+fn wizard_yes_met_a_niveau_un_bloc_legacy() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    // Bloc legacy (sans MNEMO_SESSION_ID) entouré de contenu utilisateur.
+    let legacy = "# >>> mnemo init >>>\n\
+         # >>> mnemo >>>\n\
+         __mnemo_record() { :; }\n\
+         bind -x '\"\\C-r\": __mnemo_search'\n\
+         # <<< mnemo <<<\n\
+         # <<< mnemo init <<<\n";
+    std::fs::write(bashrc(home), format!("export FOO=1\n{legacy}")).unwrap();
+
+    let out = mnemo(home)
+        .args(["init", "--wizard", "--yes"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "le wizard --yes doit réussir : {:?}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let content = std::fs::read_to_string(bashrc(home)).unwrap();
+    assert!(
+        content.contains("MNEMO_SESSION_ID"),
+        "le bloc legacy doit être mis à niveau"
+    );
+    assert!(
+        content.contains("export FOO=1"),
+        "contenu utilisateur préservé"
+    );
+    assert_eq!(
+        count_blocks(&content),
+        1,
+        "jamais de doublon après mise à niveau"
+    );
+}
+
+#[test]
 fn completions_bash_contient_le_binaire() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();

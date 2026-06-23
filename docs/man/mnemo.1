@@ -41,6 +41,17 @@ ou
 .IR fish .
 mnemo n'écrit jamais dans vos fichiers shell : redirigez vous-même la sortie.
 .TP
+.B shell upgrade
+Met à niveau le bloc d'intégration Bash existant dans
+.I ~/.bashrc
+vers la version courante (capture de
+.IR MNEMO_SESSION_ID ,
+requise par
+.BR "mnemo session" ).
+Sauvegarde automatique, remplacement du seul bloc mnemo, reste du fichier
+intact. Sans bloc installé, propose
+.BR "mnemo init" .
+.TP
 .B import
 Importe l'historique Bash existant dans la base.
 .TP

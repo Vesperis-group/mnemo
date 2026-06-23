@@ -32,6 +32,29 @@ Pour capturer les prochaines sessions, réinstallez l'intégration shell
 (`mnemo init`, ou le bloc fourni par `mnemo bashrc`) puis ouvrez un nouveau
 shell.
 
+### Mettre à niveau une intégration existante
+
+Les installations antérieures à `mnemo session` contiennent un bloc Bash qui ne
+définit pas `MNEMO_SESSION_ID`. Pour le mettre à niveau sans réinstaller :
+
+```bash
+mnemo shell upgrade
+source ~/.bashrc
+```
+
+`mnemo shell upgrade` détecte l'état du bloc présent dans `~/.bashrc` :
+
+- **aucun bloc** : rien n'est modifié ; lancez `mnemo init` pour l'installer ;
+- **bloc obsolète** : le `.bashrc` est sauvegardé puis le seul bloc mnemo est
+  remplacé par la version courante. Le reste du fichier n'est jamais touché ;
+- **bloc à jour** : aucune modification.
+
+`mnemo doctor` signale également un bloc obsolète et propose la même commande.
+Les shells déjà ouverts doivent être rechargés avec `source ~/.bashrc`. Les
+commandes anciennes sans `session_id` restent consultables via les autres
+commandes (`mnemo list`, `mnemo search`), mais ne sont pas regroupées en
+session.
+
 ## Lister les sessions
 
 ```bash

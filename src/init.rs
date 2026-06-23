@@ -24,6 +24,41 @@ pub fn run(wizard: bool, assume_yes: bool) -> Result<()> {
     }
 }
 
+/// Point d'entrée de `mnemo shell upgrade`.
+///
+/// Met à niveau le bloc d'intégration Bash existant vers la version courante
+/// (capture de `MNEMO_SESSION_ID`). Non destructif : sauvegarde systématique,
+/// aucun bloc créé s'il est absent.
+pub fn run_shell_upgrade() -> Result<()> {
+    let Some(bashrc) = bashrc_path() else {
+        eprintln!("Répertoire personnel introuvable : mise à niveau impossible.");
+        std::process::exit(1);
+    };
+
+    match shell::upgrade_block(&bashrc)? {
+        shell::ShellUpgrade::NotInstalled => {
+            println!(
+                "Aucune intégration Bash mnemo détectée dans {}.",
+                display_home(&bashrc)
+            );
+            println!("Lancez `mnemo init` pour l'installer.");
+        }
+        shell::ShellUpgrade::AlreadyCurrent => {
+            println!(
+                "Intégration Bash mnemo déjà à jour dans {} : aucun changement.",
+                display_home(&bashrc)
+            );
+        }
+        shell::ShellUpgrade::Upgraded { backup } => {
+            println!("Intégration Bash mnemo détectée : obsolète.");
+            println!("Sauvegarde créée : {}", display_home(&backup));
+            println!("Bloc d'intégration Bash mnemo mis à niveau.");
+            println!("Prochaine étape : source ~/.bashrc");
+        }
+    }
+    Ok(())
+}
+
 /// Initialisation simple (comportement historique de `mnemo init`).
 fn run_basic() -> Result<()> {
     ensure_config_and_db()?;
@@ -64,13 +99,7 @@ fn run_wizard(assume_yes: bool) -> Result<()> {
     ensure_config_and_db()?;
     println!();
 
-    if ask(
-        "Ajouter l'intégration Bash dans ~/.bashrc ?",
-        true,
-        interactive,
-    )? {
-        add_bash_integration()?;
-    }
+    setup_bash_integration(interactive)?;
     println!();
 
     match bash_history_path() {
@@ -123,6 +152,45 @@ fn ensure_config_and_db() -> Result<()> {
     Ok(())
 }
 
+/// Étape d'intégration Bash du wizard : installe le bloc s'il est absent, le met
+/// à niveau s'il est obsolète, ou ne fait rien s'il est déjà à jour. Toujours
+/// non destructif (sauvegarde avant toute écriture).
+fn setup_bash_integration(interactive: bool) -> Result<()> {
+    let Some(bashrc) = bashrc_path() else {
+        eprintln!("Répertoire personnel introuvable : intégration Bash ignorée.");
+        return Ok(());
+    };
+    let content = std::fs::read_to_string(&bashrc).unwrap_or_default();
+
+    match shell::block_state(&content) {
+        shell::BlockState::Absent => {
+            if ask(
+                "Ajouter l'intégration Bash dans ~/.bashrc ?",
+                true,
+                interactive,
+            )? {
+                add_bash_integration()?;
+            }
+        }
+        shell::BlockState::Legacy => {
+            if ask(
+                "Mettre à jour l'intégration Bash existante (active les sessions) ?",
+                true,
+                interactive,
+            )? {
+                upgrade_bash_integration(&bashrc)?;
+            }
+        }
+        shell::BlockState::Current => {
+            println!(
+                "Intégration Bash déjà à jour dans {} : aucun changement.",
+                display_home(&bashrc)
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Ajoute le bloc d'intégration Bash au `.bashrc` (sauvegarde automatique,
 /// jamais de doublon) via [`shell::install_block`].
 fn add_bash_integration() -> Result<()> {
@@ -140,6 +208,27 @@ fn add_bash_integration() -> Result<()> {
             "Intégration Bash déjà présente dans {} : aucun changement.",
             display_home(&bashrc)
         );
+    }
+    Ok(())
+}
+
+/// Met à niveau un bloc d'intégration Bash obsolète via [`shell::upgrade_block`].
+fn upgrade_bash_integration(bashrc: &Path) -> Result<()> {
+    match shell::upgrade_block(bashrc)? {
+        shell::ShellUpgrade::Upgraded { backup } => {
+            println!(
+                "Intégration Bash mise à niveau dans {} (sauvegarde {} créée).",
+                display_home(bashrc),
+                display_home(&backup)
+            );
+        }
+        shell::ShellUpgrade::AlreadyCurrent => {
+            println!("Intégration Bash déjà à jour : aucun changement.");
+        }
+        shell::ShellUpgrade::NotInstalled => {
+            // État inattendu (le bloc a disparu entre-temps) : installation propre.
+            add_bash_integration()?;
+        }
     }
     Ok(())
 }

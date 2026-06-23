@@ -653,6 +653,12 @@ intervention, un TP, un audit ou une procédure. Un fichier de sortie existant
 n'est jamais écrasé sans `--force`. Détails dans
 [docs/SESSIONS.md](docs/SESSIONS.md).
 
+> ℹ️ Une installation antérieure à `mnemo session` contient un bloc Bash qui ne
+> capture pas encore `MNEMO_SESSION_ID`. Mettez-le à niveau sans réinstaller
+> avec `mnemo shell upgrade` (sauvegarde automatique, bloc remplacé proprement),
+> puis rechargez le shell avec `source ~/.bashrc`. `mnemo doctor` signale aussi
+> ce cas et propose la commande.
+
 ### Configuration
 
 ```bash
@@ -982,6 +988,7 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo search --query <requête> --print` | Variante avec option explicite `--query`. |
 | `mnemo search <requête> [--project <nom>] [--branch <branche>] [--exit-code <n>] [--failed] [--since <durée\|date>] [--before <date>] [--cwd <chemin>] [--shell <shell>] [--limit N] [--json]` | **Recherche avancée** : filtres combinables par contexte Git, code de sortie, date, répertoire, shell ; sortie JSON stable avec `--print --json`. |
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
+| `mnemo shell upgrade` | Met à niveau le bloc d'intégration Bash existant vers la version courante (capture de `MNEMO_SESSION_ID` pour `mnemo session`) : sauvegarde automatique, bloc remplacé proprement, reste du `~/.bashrc` intact. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
 | `mnemo stats [--project <nom>] [--branch <branche>] [--since <durée\|date>] [--json]` | Statistiques d'usage enrichies (totaux, taux d'échec, top commandes / dossiers / projets / shells, activité quotidienne), filtrables (dont `--project current`) et exportables en JSON. |
 | `mnemo project <current\|list>` | Affiche le projet courant (racine Git, marqueur de projet ou dossier) ou la liste des projets connus. |
