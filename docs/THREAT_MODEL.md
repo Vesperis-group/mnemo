@@ -102,11 +102,17 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 
 ### M8 : Fuite de commandes sensibles
 - **Menace** : mots de passe / tokens capturés dans l'historique.
-- **Mitigations** : filtrage à l'import via mots-clés sensibles configurables ;
-  la base reste locale ; aucune commande n'est transmise sur le réseau.
-- **Risque résiduel** : une commande sensible non couverte par les mots-clés
-  peut être stockée localement (jamais exfiltrée). L'utilisateur peut la
-  supprimer (`delete`) ou enrichir `sensitive_keywords`.
+- **Mitigations** : filtrage à l'enregistrement et à l'import via mots-clés
+  sensibles configurables ; nettoyage a posteriori de l'historique déjà stocké
+  via `mnemo secrets scan` / `mnemo secrets redact` (dry-run par défaut,
+  sauvegarde obligatoire avant écriture, seule la colonne `command` réécrite, et
+  aucune valeur sensible jamais affichée en clair) ; la base reste locale ;
+  aucune commande n'est transmise sur le réseau.
+- **Risque résiduel** : la détection de `mnemo secrets` est heuristique et peut
+  manquer un secret à la structure inhabituelle (jamais exfiltré). L'utilisateur
+  peut le supprimer (`delete`), relancer une redaction ciblée ou enrichir
+  `sensitive_keywords`. La redaction réécrit l'historique : une sauvegarde est
+  conservée pour revenir en arrière.
 
 ### M9 : Erreur réseau GitHub
 - **Menace** : indisponibilité, timeout, réponse inattendue lors de

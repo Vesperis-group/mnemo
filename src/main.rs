@@ -17,6 +17,7 @@ mod maintenance;
 mod migrations;
 mod project;
 mod prune;
+mod secrets;
 mod session;
 mod shell;
 mod stats;
@@ -190,6 +191,15 @@ fn run() -> Result<()> {
                 output,
                 force,
             } => session::run_export(session_id, last, format, output, force),
+        },
+        Command::Secrets { action } => match action {
+            cli::SecretsCommand::Scan { limit, json } => secrets::run_scan(limit, json),
+            cli::SecretsCommand::Redact {
+                dry_run,
+                apply,
+                yes,
+                backup,
+            } => secrets::run_redact(dry_run, apply, yes, backup),
         },
     }
 }
