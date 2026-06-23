@@ -192,10 +192,12 @@ si un seul contrôle critique échoue** :
   le packaging et donc la publication. Les `.sha256` sont attachés à la Release
   aux côtés des archives (cf. `release-it.json`, liste d'assets).
 - **Actions épinglées par SHA.** Toutes les actions tierces (`actions/checkout`,
-  `actions/setup-node`, `Swatinem/rust-cache`) sont référencées par SHA de
-  commit complet, avec le tag lisible en commentaire et la procédure de mise à
-  jour (`git ls-remote`). Cela empêche le déplacement silencieux d'un tag
-  flottant.
+  `actions/setup-node`, `actions/create-github-app-token`, `Swatinem/rust-cache`,
+  `github/codeql-action`) sont référencées par SHA de commit complet, avec le tag
+  lisible en commentaire et la procédure de mise à jour (`git ls-remote`). Cela
+  empêche le déplacement silencieux d'un tag flottant. Ces actions sont maintenues
+  sur des versions ciblant Node 24, ce qui supprime l'avertissement de dépréciation
+  de Node 20 tout en conservant l'épinglage par SHA.
 - **Versions de l'outillage figées (pas de canal flottant).**
   - **Rust** : `rust-toolchain.toml` épingle la version exacte du compilateur
     (`channel = "1.96.0"`), ses composants (`rustfmt`, `clippy`) et la cible
