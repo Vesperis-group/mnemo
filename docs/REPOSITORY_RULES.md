@@ -8,8 +8,8 @@ n'est qu'un garde-fou *best-effort* et **ne remplace pas** ces rulesets.
 
 Deux rulesets sont recommandés :
 
-- **Protect main** — protège la branche par défaut `main`.
-- **Protect release tags** — protège les tags de version `v*`.
+- **Protect main** : protège la branche par défaut `main`.
+- **Protect release tags** : protège les tags de version `v*`.
 
 ---
 
@@ -26,7 +26,7 @@ Deux rulesets sont recommandés :
     **Require branches to be up to date**.
   - **Block force pushes**.
   - **Restrict deletions**.
-  - *(optionnel)* **Require signed commits** — compatible avec l'App de release,
+  - *(optionnel)* **Require signed commits** : compatible avec l'App de release,
     dont les commits poussés via le jeton sont vérifiés.
 
 ### Required status checks

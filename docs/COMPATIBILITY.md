@@ -23,11 +23,11 @@ garanties de stabilité visées, en particulier à partir de la version **1.0**.
 
 mnemo suit le [versionnage sémantique](https://semver.org/lang/fr/) :
 
-- **MAJEURE** : changement incompatible - suppression d'une commande ou d'une
+- **MAJEURE** : changement incompatible (suppression d'une commande ou d'une
   option, rupture d'un format de sortie stable, changement de comportement par
-  défaut destructif.
-- **MINEURE** : ajout rétrocompatible - nouvelle commande, nouvelle option,
-  nouveau champ dans une sortie JSON.
+  défaut destructif).
+- **MINEURE** : ajout rétrocompatible (nouvelle commande, nouvelle option,
+  nouveau champ dans une sortie JSON).
 - **CORRECTIVE** : correction de bug ou de sécurité sans rupture d'interface.
 
 ## Surface CLI stable

@@ -26,7 +26,7 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 
 ## 3. Menaces, mitigations et risques résiduels
 
-### M1 - Perte accidentelle de données
+### M1 : Perte accidentelle de données
 - **Menace** : suppression involontaire de la base / config via `delete`,
   `prune`, `maintenance run`, `restore` ou `uninstall`.
 - **Mitigations** : `--dry-run` partout ; confirmation obligatoire (refus en
@@ -38,16 +38,16 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 - **Risque résiduel** : un utilisateur passant `--yes --purge` en connaissance
   de cause supprime ses données (une sauvegarde de sécurité reste créée avant).
 
-### M2 - Archive de restauration malveillante
+### M2 : Archive de restauration malveillante
 - **Menace** : `mnemo restore archive.tar.gz` où l'archive est forgée.
 - **Mitigations** : extraction dans un **dossier temporaire** isolé ;
   validation de chaque entrée (cf. M3) ; ouverture de la base en **lecture
   seule** + validation (table `commands`, version de schéma) **avant**
   remplacement ; sauvegarde de sécurité préalable.
 - **Risque résiduel** : une base SQLite valide mais au contenu trompeur peut
-  être restaurée - mais elle ne s'exécute pas (données, pas du code).
+  être restaurée, mais elle ne s'exécute pas (données, pas du code).
 
-### M3 - Path traversal dans une archive tar
+### M3 : Path traversal dans une archive tar
 - **Menace** : entrées `../evil`, `/etc/cron.d/x`, liens symboliques sortant de
   la racine d'extraction.
 - **Mitigations** : `src/archive.rs::safe_unpack` valide **chaque** entrée
@@ -57,7 +57,7 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 - **Risque résiduel** : négligeable ; couvert par tests unitaires et
   d'intégration (`restore`, `upgrade`).
 
-### M4 - Mise à niveau corrompue / downgrade
+### M4 : Mise à niveau corrompue / downgrade
 - **Menace** : asset de release tronqué, altéré, ou substitué.
 - **Mitigations** : vérification **SHA-256** de l'archive **avant** extraction
   (toujours obligatoire et bloquante) ; **vérification de la signature Sigstore**
@@ -80,19 +80,19 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   automatiquement côté client (vérification manuelle documentée). Un compromis de
   l'organisation GitHub resterait hors de portée de ces mitigations.
 
-### M5 - SHA invalide / format `.sha256` inattendu
+### M5 : SHA invalide / format `.sha256` inattendu
 - **Menace** : fichier `.sha256` mal formé ou condensat erroné.
 - **Mitigations** : parsing strict (`parse_sha256_file`) ; toute non-concordance
   **refuse** l'installation. (`upgrade_sha_invalide_refuse_installation`)
 - **Risque résiduel** : aucun connu.
 
-### M6 - Suppression non confirmée
+### M6 : Suppression non confirmée
 - **Menace** : suppression silencieuse depuis un script / pipe.
 - **Mitigations** : en mode non interactif (stdin non TTY), toute opération
   destructive sans `--yes` est **refusée** avec un message clair.
 - **Risque résiduel** : usage explicite de `--yes` en CI (intentionnel).
 
-### M7 - Injection dans `.bashrc`
+### M7 : Injection dans `.bashrc`
 - **Menace** : corruption du `.bashrc` (exécuté à chaque shell) lors de
   l'installation / désinstallation du bloc d'intégration.
 - **Mitigations** : bloc délimité par des marqueurs uniques ; **sauvegarde**
@@ -100,7 +100,7 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   (`remove_bashrc_block`, testé idempotent).
 - **Risque résiduel** : négligeable.
 
-### M8 - Fuite de commandes sensibles
+### M8 : Fuite de commandes sensibles
 - **Menace** : mots de passe / tokens capturés dans l'historique.
 - **Mitigations** : filtrage à l'import via mots-clés sensibles configurables ;
   la base reste locale ; aucune commande n'est transmise sur le réseau.
@@ -108,14 +108,14 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
   peut être stockée localement (jamais exfiltrée). L'utilisateur peut la
   supprimer (`delete`) ou enrichir `sensitive_keywords`.
 
-### M9 - Erreur réseau GitHub
+### M9 : Erreur réseau GitHub
 - **Menace** : indisponibilité, timeout, réponse inattendue lors de
   `update` / `upgrade`.
 - **Mitigations** : erreurs contextualisées (statut HTTP vs transport), code de
   sortie non nul, aucun effet de bord destructif. `doctor` reste hors-ligne.
 - **Risque résiduel** : aucun (mode dégradé propre).
 
-### M10 - Exposition locale de l'historique via permissions trop ouvertes
+### M10 : Exposition locale de l'historique via permissions trop ouvertes
 - **Menace** : sur une machine multi-utilisateurs, un autre compte local lit la
   config, la base d'historique shell ou les archives de sauvegarde parce que ces
   fichiers ont été créés avec des permissions de groupe/autres (`644`, `664`…).
@@ -125,7 +125,7 @@ risques résiduels, adaptée à un outil mono-utilisateur sans composant serveur
 - **Mitigations** : sous Unix, config, `history.db` et archives `*.tar.gz` sont
   créées en `600` et les dossiers gérés en `700` (durcissement centralisé
   appliqué à la création et à `init`). `mnemo doctor` signale toute permission
-  trop ouverte - y compris un résumé agrégé des archives de sauvegarde - et
+  trop ouverte (y compris un résumé agrégé des archives de sauvegarde) et
   `mnemo doctor --fix` resserre à `600` la config, la base **et toutes les
   archives de sauvegarde existantes** (durcissement rétroactif) sans jamais lire,
   modifier ou supprimer le contenu des archives.
@@ -220,7 +220,7 @@ si un seul contrôle critique échoue** :
   - un fichier de **checksums agrégés** couvrant les deux archives et le SBOM
     (`scripts/checksums-release.sh`), vérifié avant signature ;
   - pour chaque artefact, une **signature `cosign`** (keyless, OIDC ambiant
-    GitHub Actions - aucun secret long terme) et une **attestation de
+    GitHub Actions, aucun secret long terme) et une **attestation de
     provenance SLSA v1** (`cosign attest-blob`), toutes deux **re-vérifiées**
     par `cosign verify-blob` / `verify-blob-attestation`
     (`scripts/sign-release.sh`).

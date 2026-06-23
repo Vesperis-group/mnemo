@@ -19,7 +19,7 @@ section « Aperçu » du `README.md` par :
 
 ## Générer la capture
 
-### Option A - capture du terminal (recommandée)
+### Option A : capture du terminal (recommandée)
 
 1. Lancer la TUI avec quelques commandes en base :
 
@@ -34,7 +34,7 @@ section « Aperçu » du `README.md` par :
 
 3. Enregistrer le fichier sous `docs/assets/mnemo-tui.png`.
 
-### Option B - rendu texte reproductible
+### Option B : rendu texte reproductible
 
 Un aperçu **texte** fidèle est déjà inclus dans le `README.md` (section
 « Aperçu »). Il est produit par le rendu réel de la TUI dans un backend de test
