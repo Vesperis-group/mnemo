@@ -22,7 +22,7 @@ plutôt qu'avec un *Personal Access Token* (PAT) long terme.
 | Propriétaire | organisation `Vesperis-group` |
 | Installation | **uniquement** sur le dépôt `mnemo` |
 | Action consommatrice | `actions/create-github-app-token` (épinglée par SHA) |
-| Variable Actions | `MNEMO_RELEASE_APP_ID` |
+| Variable Actions | `MNEMO_RELEASE_APP_CLIENT_ID` |
 | Secret Actions | `MNEMO_RELEASE_APP_PRIVATE_KEY` |
 
 Le workflow lit ces deux entrées :
@@ -32,7 +32,7 @@ Le workflow lit ces deux entrées :
   id: app-token
   uses: actions/create-github-app-token@<sha> # v3.2.0
   with:
-    app-id: ${{ vars.MNEMO_RELEASE_APP_ID }}
+    client-id: ${{ vars.MNEMO_RELEASE_APP_CLIENT_ID }}
     private-key: ${{ secrets.MNEMO_RELEASE_APP_PRIVATE_KEY }}
     owner: ${{ github.repository_owner }}
     repositories: mnemo
@@ -79,10 +79,16 @@ L'App n'a **pas** besoin de s'abonner à des *events* webhook : décocher
 6. **Where can this GitHub App be installed?** : **Only on this account**.
 7. Cliquer **Create GitHub App**.
 
-### 3.1 Récupérer l'App ID
+### 3.1 Récupérer le Client ID
 
-Sur la page de l'App, noter **App ID** (un entier). Il alimentera la variable
-`MNEMO_RELEASE_APP_ID`.
+Sur la page de l'App, noter le **Client ID** (une chaîne de la forme
+`Iv23li...`, affichée dans la section **About** en haut de la page de l'App, à
+côté de l'App ID). Il alimentera la variable `MNEMO_RELEASE_APP_CLIENT_ID`.
+
+> ⚠️ Le **Client ID** est **différent** de l'**App ID** : l'App ID est un
+> entier, le Client ID est une chaîne préfixée `Iv23li`. L'action
+> `create-github-app-token` attend désormais le **Client ID** via l'entrée
+> `client-id` (l'entrée `app-id` est dépréciée).
 
 ### 3.2 Générer la clé privée
 
@@ -107,15 +113,15 @@ Page de l'App → **Install App** → choisir l'organisation `Vesperis-group` �
 Dans **`mnemo` → Settings → Secrets and variables → Actions** :
 
 - onglet **Variables** → **New repository variable** :
-  - **Name** : `MNEMO_RELEASE_APP_ID`
-  - **Value** : l'App ID (entier) de la section 3.1.
+  - **Name** : `MNEMO_RELEASE_APP_CLIENT_ID`
+  - **Value** : le Client ID (chaîne `Iv23li...`) de la section 3.1.
 - onglet **Secrets** → **New repository secret** :
   - **Name** : `MNEMO_RELEASE_APP_PRIVATE_KEY`
   - **Value** : le contenu complet du fichier `.pem` (section 3.2).
 
-> L'App ID n'est pas sensible (il peut être une *variable*). Seule la clé privée
-> est un *secret*. Aucune de ces valeurs n'est jamais affichée dans les logs :
-> `create-github-app-token` masque automatiquement le jeton généré.
+> Le Client ID n'est pas sensible (il peut être une *variable*). Seule la clé
+> privée est un *secret*. Aucune de ces valeurs n'est jamais affichée dans les
+> logs : `create-github-app-token` masque automatiquement le jeton généré.
 
 ---
 
