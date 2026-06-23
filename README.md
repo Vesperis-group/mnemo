@@ -34,6 +34,7 @@ qui reste entièrement sur votre machine.
 - 🔏 Releases vérifiables : SHA-256, signatures cosign keyless, SBOM, provenance.
 - 🐧 Cible principale : **Linux et WSL** avec Bash.
 - 🤖 Mode non interactif `--print` (et sorties JSON) pour les scripts et la CI.
+- 🚀 Onboarding guidé `mnemo init --wizard` et complétions shell `bash`, `zsh`, `fish`.
 
 ---
 
@@ -50,6 +51,8 @@ qui reste entièrement sur votre machine.
   - [Maintenance automatique](#maintenance-automatique)
   - [Configuration](#configuration)
   - [Intégration Bash](#intégration-bash)
+  - [Complétions shell](#complétions-shell)
+  - [Page de manuel](#page-de-manuel)
   - [Diagnostic](#diagnostic)
   - [Version](#version)
   - [Mise à jour et cycle de vie](#mise-à-jour-et-cycle-de-vie)
@@ -73,8 +76,8 @@ Installer la dernière release, puis activer l'historique :
 # 1. Installer (binaire musl statique vérifié par SHA-256)
 curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh | bash
 
-# 2. Importer l'historique Bash existant (optionnel)
-mnemo import
+# 2. Premier démarrage guidé (intégration Bash, import, diagnostic)
+mnemo init --wizard
 
 # 3. Recharger le shell pour activer l'enregistrement et Ctrl+R
 source ~/.bashrc
@@ -82,6 +85,10 @@ source ~/.bashrc
 # 4. Ouvrir la recherche interactive
 mnemo search
 ```
+
+L'assistant `mnemo init --wizard` est entièrement non destructif : il propose
+chaque étape avec une valeur par défaut sûre et n'efface jamais de données. Voir
+[docs/UX_ONBOARDING.md](docs/UX_ONBOARDING.md) pour le détail du parcours.
 
 Mode non interactif (scripts, CI), sans ouvrir la TUI :
 
@@ -693,6 +700,32 @@ mnemo import
 mnemo search
 ```
 
+### Complétions shell
+
+`mnemo completions <shell>` écrit le script de complétion sur la sortie standard
+pour `bash`, `zsh` ou `fish`. mnemo **ne modifie jamais** vos fichiers shell :
+vous redirigez vous-même la sortie.
+
+```bash
+# Bash, pour la session courante
+source <(mnemo completions bash)
+
+# Installation persistante
+mnemo completions bash > ~/.local/share/bash-completion/completions/mnemo
+mnemo completions zsh  > ~/.zsh/completions/_mnemo
+mnemo completions fish > ~/.config/fish/completions/mnemo.fish
+```
+
+Un shell non supporté produit une erreur claire listant les valeurs possibles.
+
+### Page de manuel
+
+Une page de manuel au format troff est fournie dans le dépôt :
+
+```bash
+man ./docs/man/mnemo.1
+```
+
 ### Diagnostic
 
 `mnemo doctor` inspecte l'installation locale et affiche un rapport clair. En
@@ -917,6 +950,8 @@ interactif, `--purge` exige aussi `--yes`.
 | Commande | Description |
 | --- | --- |
 | `mnemo init` | Crée `~/.config/mnemo/config.toml`, `~/.local/share/mnemo/history.db` et affiche le snippet `.bashrc`. |
+| `mnemo init --wizard [--yes]` | Assistant d'onboarding interactif et non destructif (intégration Bash, import, diagnostic). `--yes` accepte les choix sûrs par défaut en contexte non interactif. |
+| `mnemo completions <bash\|zsh\|fish>` | Écrit un script de complétion shell sur stdout (n'écrit jamais dans vos fichiers shell). |
 | `mnemo import [--file <chemin>]` | Importe `~/.bash_history` (ou un fichier donné) dans SQLite. |
 | `mnemo add --cmd "<cmd>" [--cwd "<dir>"] [--exit-code <n>]` | Ajoute une commande dans la base. |
 | `mnemo tui [requête] [--project <nom>] [--branch <branche>] [--cwd <chemin>] [--failed]` | Ouvre la **TUI avancée** (recherche, filtres, détails, suppression). |

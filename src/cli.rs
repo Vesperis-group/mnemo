@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 use std::path::PathBuf;
 
 use crate::export::ExportFormat;
@@ -18,7 +19,26 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Initialise la configuration et la base de données.
-    Init,
+    Init {
+        /// Lance l'assistant d'onboarding interactif (intégration Bash, import,
+        /// diagnostic). Toutes les actions proposées sont non destructives.
+        #[arg(long)]
+        wizard: bool,
+        /// En mode `--wizard` non interactif, accepte les choix sûrs par défaut
+        /// sans rien supprimer ni purger.
+        #[arg(long)]
+        yes: bool,
+    },
+
+    /// Génère un script de complétion shell sur stdout (bash, zsh, fish).
+    ///
+    /// mnemo n'écrit jamais dans vos fichiers shell : redirigez la sortie vers
+    /// l'emplacement adéquat (voir `docs/UX_ONBOARDING.md`).
+    Completions {
+        /// Shell cible.
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
 
     /// Importe l'historique Bash (~/.bash_history par défaut) dans la base.
     Import {
@@ -314,6 +334,27 @@ pub struct SearchArgs {
     pub cwd: Option<String>,
     pub shell: Option<String>,
     pub json: bool,
+}
+
+/// Shells supportés par `mnemo completions`. Limité volontairement à bash, zsh
+/// et fish (un shell inconnu produit une erreur claire de clap). L'enregistrement
+/// automatique du hook reste, lui, Bash-first.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+}
+
+impl CompletionShell {
+    /// Convertit vers le générateur `clap_complete` correspondant.
+    pub fn generator(self) -> Shell {
+        match self {
+            CompletionShell::Bash => Shell::Bash,
+            CompletionShell::Zsh => Shell::Zsh,
+            CompletionShell::Fish => Shell::Fish,
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]

@@ -1,0 +1,81 @@
+.\" Manpage pour mnemo.
+.\" Affichage local : man ./docs/man/mnemo.1
+.TH MNEMO 1 "2024" "mnemo 1.0.4" "Manuel utilisateur mnemo"
+.SH NAME
+mnemo \- historique de commandes shell, local et orienté confidentialité
+.SH SYNOPSIS
+.B mnemo
+[\fICOMMANDE\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B mnemo
+enregistre, recherche et gère l'historique de vos commandes shell dans une base
+SQLite locale. Toutes les données restent sur votre machine : aucune
+synchronisation distante, aucune télémétrie.
+.PP
+L'enregistrement automatique est conçu pour Bash : l'intégration installe un
+hook dans
+.IR ~/.bashrc .
+Les autres shells peuvent utiliser mnemo en important leur historique et via les
+complétions générées par
+.BR "mnemo completions" .
+.SH COMMANDS
+.TP
+.B init
+Initialise la configuration et la base, puis affiche le snippet Bash à
+installer.
+.TP
+.B init --wizard
+Lance l'assistant d'onboarding interactif : aperçu de l'installation,
+initialisation, intégration Bash, import optionnel de
+.IR ~/.bash_history ,
+et diagnostic. Toutes les actions sont non destructives. En contexte non
+interactif, ajoutez
+.B --yes
+pour accepter les choix sûrs par défaut.
+.TP
+.B completions \fISHELL\fR
+Génère un script de complétion sur la sortie standard pour
+.IR bash ,
+.I zsh
+ou
+.IR fish .
+mnemo n'écrit jamais dans vos fichiers shell : redirigez vous-même la sortie.
+.TP
+.B import
+Importe l'historique Bash existant dans la base.
+.TP
+.B search
+Recherche dans l'historique enregistré.
+.TP
+.B doctor
+Diagnostique l'installation (configuration, base, intégration shell,
+permissions).
+.SH FILES
+.TP
+.I ~/.config/mnemo/config.toml
+Fichier de configuration.
+.TP
+.I ~/.local/share/mnemo/mnemo.db
+Base de données SQLite locale.
+.TP
+.I ~/.bashrc
+Reçoit le bloc d'intégration Bash lors de l'installation.
+.SH SECURITY
+mnemo applique des permissions restrictives sur la configuration et la base.
+Les commandes considérées sensibles peuvent être ignorées à l'import selon la
+configuration. Aucune donnée n'est transmise hors de la machine.
+.SH EXAMPLES
+.TP
+Premier démarrage guidé :
+.B mnemo init --wizard
+.TP
+Activer la complétion Bash pour la session courante :
+.B source <(mnemo completions bash)
+.TP
+Installer la complétion Zsh :
+.B mnemo completions zsh > ~/.zsh/completions/_mnemo
+.SH SEE ALSO
+.BR bash (1),
+.BR sqlite3 (1)
+.PP
+Documentation : docs/UX_ONBOARDING.md
