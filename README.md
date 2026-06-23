@@ -7,8 +7,6 @@
 [![Rust 1.96](https://img.shields.io/badge/rust-1.96.0-orange.svg)](rust-toolchain.toml)
 [![Supply chain](https://img.shields.io/badge/supply%20chain-SHA--256%20%2B%20cosign%20%2B%20SBOM-success.svg)](#sécurité--confidentialité)
 
-<video src="docs/assets/mnemo-tui.mp4" controls width="100%"></video>
-
 https://github.com/user-attachments/assets/d7deb152-1e8d-48cd-8297-53a81798835d
 
 ```bash
@@ -49,7 +47,7 @@ entièrement sur votre machine.
 - [Version : `mnemo version`](#version--mnemo-version)
 - [Intégration Bash](#intégration-bash)
 - [Diagnostic : `mnemo doctor`](#diagnostic--mnemo-doctor)
-- [Release v0.1](#release-v01)
+- [Release et publication](#release-et-publication)
 - [Politique de branche](#politique-de-branche)
 - [Pre-commit hooks (à venir)](#pre-commit-hooks-à-venir)
 - [Chemins XDG utilisés](#chemins-xdg-utilisés)
@@ -70,7 +68,7 @@ entièrement sur votre machine.
 Interface TUI « ops dashboard » (`mnemo search`) : barre d'identité, synthèse
 (KPI), liste des commandes et panneau de détails sectionné.
 
-<video src="docs/assets/mnemo-tui.mp4" controls width="100%"></video>
+> ▶️ La démonstration animée est disponible en haut du README.
 
 Mode non interactif (scripts / CI) :
 
@@ -131,7 +129,7 @@ Le script :
 Choisir une **version précise** :
 
 ```bash
-MNEMO_VERSION="v0.1.2" \
+MNEMO_VERSION="v1.0.0" \
   bash <(curl -fsSL https://raw.githubusercontent.com/Vesperis-group/mnemo/main/scripts/install.sh)
 ```
 
@@ -812,7 +810,7 @@ d'exécution, pratique pour les rapports de bug et la vérification d'installati
 
 ```console
 $ mnemo version
-mnemo 0.1.0
+mnemo 1.0.0
   cible   : linux/x86_64
   profil  : release
   binaire : /home/<user>/.local/bin/mnemo
@@ -919,7 +917,7 @@ Chaque ligne porte un statut `[OK]`, `[WARN]`, `[ERROR]`, `[INFO]` ou `[FIX]`.
 ```text
 mnemo doctor - rapport de diagnostic
 ------------------------------------
-[INFO ] mnemo version 0.1.0
+[INFO ] mnemo version 1.0.0
 [ OK  ] Binaire trouvé dans le PATH : ~/.local/bin/mnemo
 [ OK  ] ~/.local/bin est dans le PATH
 [ OK  ] Configuration présente : ~/.config/mnemo/config.toml
@@ -944,7 +942,7 @@ Sortie JSON (`--json`) :
 {
   "summary": { "ok": 11, "warn": 0, "error": 0, "info": 2, "fix": 0, "exit_code": 0 },
   "checks": [
-    { "name": "binary.version", "status": "info", "message": "mnemo version 0.1.0" },
+    { "name": "binary.version", "status": "info", "message": "mnemo version 1.0.0" },
     { "name": "db.table", "status": "ok", "message": "Table `commands` présente" }
   ]
 }
@@ -955,7 +953,7 @@ des caractères spéciaux).
 
 ---
 
-## Release v0.1
+## Release et publication
 
 Le projet est outillé pour une release GitHub **automatisée et versionnée** via
 [`release-it`](https://github.com/release-it/release-it). `Cargo.toml` reste la
@@ -1027,23 +1025,30 @@ npm ci
 npm run release:dry      # simulation, n'écrit/ne pousse rien
 ```
 
-Pour figer explicitement une première version (au lieu de l'incrément calculé) :
+Pour figer explicitement une version précise (au lieu de l'incrément calculé) :
 
 ```bash
-npx release-it 0.1.0 --ci --config release-it.json
+npx release-it 1.0.0 --ci --config release-it.json
 ```
 
 ### Jeton de publication et branche protégée
 
-Si `main` est protégée, le `GITHUB_TOKEN` par défaut peut être **bloqué** pour
-pousser le commit de release. Deux options (voir
-[Politique de branche](#politique-de-branche)) :
+Si `main` est protégée, le `GITHUB_TOKEN` par défaut est **bloqué** pour pousser
+le commit et le tag de release. `mnemo` s'appuie donc sur une **GitHub App
+dédiée** (`vesperis-mnemo-release`), **plutôt qu'un PAT long terme** : le job
+`publish` de `release.yml` génère un **jeton éphémère** via
+[`actions/create-github-app-token`](https://github.com/actions/create-github-app-token),
+limité au seul dépôt `mnemo` et aux permissions `Contents: write` /
+`Pull requests: read`.
 
-- **A.** autoriser le contournement de la protection pour le bot de release
-  uniquement (Rulesets → *Bypass list*) ;
-- **B.** créer un PAT dédié `RELEASE_TOKEN` (scope `repo`) en *secret* du dépôt.
-  Le workflow l'utilise automatiquement s'il existe
-  (`secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN`).
+Configuration requise (manuelle, côté GitHub) :
+
+- variable `MNEMO_RELEASE_APP_ID` et secret `MNEMO_RELEASE_APP_PRIVATE_KEY` ;
+- l'App ajoutée à la **bypass list** des rulesets `main` et `v*`.
+
+Procédure complète : **[docs/RELEASE_APP.md](docs/RELEASE_APP.md)** (création de
+l'App, permissions, clé privée) et **[docs/REPOSITORY_RULES.md](docs/REPOSITORY_RULES.md)**
+(rulesets et bypass).
 
 ---
 
@@ -1065,10 +1070,11 @@ la cible `main` :
 - ✅ **Restrict who can push to matching branches** ;
 - ✅ **Include administrators** (si souhaité).
 
-> ⚠️ **Ne pas bloquer le bot de release.** Si `release-it` doit pousser le commit
-> et le tag de release, ajoutez l'acteur (`github-actions[bot]` ou le compte du
-> `RELEASE_TOKEN`) à la *bypass list* du ruleset, ou utilisez l'option B
-> (`RELEASE_TOKEN`). Sinon le push de release échouera sur une branche protégée.
+> ⚠️ **Ne pas bloquer l'App de release.** Le commit et le tag de release sont
+> poussés par la GitHub App `vesperis-mnemo-release` : ajoutez-la (et elle seule)
+> à la *bypass list* des rulesets `main` et `v*`, sinon le push de release
+> échouera sur une référence protégée. Voir
+> [docs/REPOSITORY_RULES.md](docs/REPOSITORY_RULES.md).
 
 ---
 
@@ -1624,7 +1630,7 @@ puis `source ~/.bashrc`.
 Le binaire GNU est lié à la glibc de la machine de build. Un binaire construit
 sur une distribution récente exige une glibc récente.
 Solutions :
-- utilisez une release **`v0.1.2`+** ;
+- utilisez une release **`v1.0.0`+** ;
 - préférez l'asset **`x86_64-unknown-linux-musl`** (statique, sans dépendance à
   la glibc) - c'est le **choix par défaut** de l'installateur :
   ```bash

@@ -1,0 +1,80 @@
+name: CodeQL
+
+# Analyse statique de sécurité (SAST) du code Rust via CodeQL.
+# Complète la CI (clippy) et l'audit supply chain (cargo-audit/deny, gitleaks)
+# en recherchant des motifs de vulnérabilités dans le code source lui-même.
+#
+# Déclencheurs : push et pull_request sur main, scan hebdomadaire programmé et
+# déclenchement manuel. Les résultats remontent dans l'onglet Security du dépôt.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Lundi 06:17 UTC (minutes volontairement décalées des heures rondes pour
+    # lisser la charge des runners planifiés).
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+# Permissions minimales : lecture du dépôt + écriture des alertes de sécurité
+# (publication des résultats CodeQL dans l'onglet Security).
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+# ---------------------------------------------------------------------------
+# Actions épinglées par SHA de commit complet (supply chain). Le tag lisible
+# est rappelé en commentaire. Pour mettre à jour : récupérer le nouveau SHA via
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (pour un tag annoté, utiliser le SHA de la ligne `refs/tags/<tag>^{}`) puis
+# remplacer le hash ET le commentaire de version.
+#
+# Rust est figé par rust-toolchain.toml (rustup du runner ; pas de canal
+# flottant ni d'action tierce pour la toolchain). Runner épinglé sur
+# ubuntu-24.04 (cf. docs/THREAT_MODEL.md pour la nuance « pas immuable au
+# digest »).
+# ---------------------------------------------------------------------------
+
+jobs:
+  analyze:
+    name: CodeQL (Rust)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3.36.2
+        with:
+          languages: rust
+
+      # Compilation pilotée par CodeQL : pour un langage compilé, l'analyse
+      # observe le build réel. `autobuild` détecte Cargo et lance la
+      # compilation avec la toolchain figée par rust-toolchain.toml.
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3.36.2
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3.36.2
+        with:
+          category: "/language:rust"

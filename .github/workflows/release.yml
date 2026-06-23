@@ -182,13 +182,33 @@ jobs:
       pull-requests: read # lecture du contexte des PR (changelog)
       id-token: write # OIDC keyless pour cosign (sign-blob / attest-blob)
     steps:
+      # ----- Jeton GitHub App de release (aucun PAT long terme) -----
+      # Le token est généré À L'EXÉCUTION : durée de vie courte, limité au
+      # seul dépôt mnemo et aux permissions de l'App `vesperis-mnemo-release`
+      # (Contents: write, Pull requests: read). Voir docs/RELEASE_APP.md.
+      #
+      # ⚠️ Pré-requis ruleset : l'App `vesperis-mnemo-release` DOIT figurer
+      # dans la *bypass list* des rulesets « Protect main » et « Protect
+      # release tags » pour pouvoir pousser le commit
+      # `chore: release vX.Y.Z [skip ci]` et le tag `vX.Y.Z` sur des refs
+      # protégées. Voir docs/REPOSITORY_RULES.md.
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.MNEMO_RELEASE_APP_ID }}
+          private-key: ${{ secrets.MNEMO_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: mnemo
+
       - name: Checkout (historique complet)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
-          # RELEASE_TOKEN (PAT) si main est protégée et n'autorise pas le
-          # GITHUB_TOKEN à pousser ; sinon repli sur le token par défaut.
-          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # Jeton de l'App de release (étape ci-dessus) : autorise le push du
+          # commit de release et du tag, y compris sur des refs protégées si
+          # l'App est dans la bypass list des rulesets.
+          token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
       - name: Setup Rust (pinned via rust-toolchain.toml)
@@ -279,5 +299,7 @@ jobs:
 
       - name: Run release-it
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          # Même jeton App : release-it pousse le commit/tag et crée la
+          # GitHub Release via ce token éphémère (jamais un PAT).
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npm run release

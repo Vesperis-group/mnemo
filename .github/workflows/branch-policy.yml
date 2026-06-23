@@ -5,7 +5,7 @@ name: Branch policy
 # ⚠️ Ceci ne remplace PAS la vraie protection de branche. La protection
 # effective de `main` doit être configurée dans GitHub :
 #   Settings → Rules → Rulesets  (ou Settings → Branches → Branch protection)
-# Voir la section « Politique de branche » du README.
+# Voir la section « Politique de branche » du README et docs/REPOSITORY_RULES.md.
 #
 # Ce workflow :
 #   - sur pull_request : vérifie que la PR ne provient pas directement de `main`.
@@ -28,11 +28,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: La PR doit venir d'une branche dédiée
+        # github.head_ref est une donnée contrôlée par l'auteur de la PR : on la
+        # passe par une variable d'environnement plutôt que de l'interpoler
+        # directement dans le script (durcissement injection, cf. actionlint).
+        env:
+          HEAD_REF: ${{ github.head_ref }}
         run: |
-          head="${{ github.head_ref }}"
-          echo "Branche source : ${head}"
-          if [ "${head}" = "main" ] || [ "${head}" = "master" ]; then
-            echo "::error::Une PR ne doit pas provenir de '${head}'. Créez une branche dédiée (ex. feature/xxx)."
+          echo "Branche source : ${HEAD_REF}"
+          if [ "${HEAD_REF}" = "main" ] || [ "${HEAD_REF}" = "master" ]; then
+            echo "::error::Une PR ne doit pas provenir de '${HEAD_REF}'. Créez une branche dédiée (ex. feature/xxx)."
             exit 1
           fi
           echo "::notice::Flux PR conforme."
