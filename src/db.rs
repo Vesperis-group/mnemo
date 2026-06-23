@@ -480,6 +480,25 @@ pub fn delete_command(conn: &Connection, id: i64) -> Result<usize> {
     Ok(n)
 }
 
+/// Applique des redactions de texte de commande en une seule transaction.
+///
+/// Seul le champ `command` est mis à jour ; tous les autres champs
+/// (`created_at`, `cwd`, `exit_code`, contexte Git, `session_id`…) sont laissés
+/// intacts. Requêtes paramétrées. Renvoie le nombre de lignes effectivement
+/// modifiées. Atomique : en cas d'erreur, la transaction n'est pas validée.
+pub fn apply_redactions(conn: &Connection, items: &[(i64, String)]) -> Result<usize> {
+    let tx = conn.unchecked_transaction()?;
+    let mut changed = 0usize;
+    {
+        let mut stmt = tx.prepare("UPDATE commands SET command = ?1 WHERE id = ?2")?;
+        for (id, command) in items {
+            changed += stmt.execute(rusqlite::params![command, id])?;
+        }
+    }
+    tx.commit()?;
+    Ok(changed)
+}
+
 /// Compte les commandes plus anciennes que `cutoff` (format `YYYY-MM-DD
 /// HH:MM:SS`), en respectant le filtre de contexte Git.
 pub fn count_older_than(conn: &Connection, cutoff: &str, filter: &SearchFilter) -> Result<i64> {

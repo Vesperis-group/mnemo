@@ -72,6 +72,19 @@ est fourni ; n'écrase jamais un fichier existant sans
 .B search
 Recherche dans l'historique enregistré.
 .TP
+.B secrets scan [--limit \fIN\fR] [--json]
+Repère dans l'historique stocké les commandes potentiellement sensibles. Elles
+sont toujours affichées sous forme redactée ; aucune valeur n'apparaît en clair.
+Lecture seule.
+.TP
+.B secrets redact [--apply] [--yes] [--backup]
+Redacte en place les commandes sensibles déjà stockées. Dry-run par défaut :
+.B --apply
+est requis pour écrire. Une sauvegarde complète est créée avant toute
+modification et seule la colonne
+.I command
+est réécrite.
+.TP
 .B doctor
 Diagnostique l'installation (configuration, base, intégration shell,
 permissions).

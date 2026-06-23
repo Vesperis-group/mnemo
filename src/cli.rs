@@ -333,6 +333,17 @@ pub enum Command {
         #[command(subcommand)]
         action: SessionCommand,
     },
+
+    /// Analyse et redacte les secrets présents dans l'historique déjà stocké.
+    ///
+    /// `scan` repère les commandes potentiellement sensibles et les affiche
+    /// toujours sous forme redactée. `redact` les nettoie en place (dry-run par
+    /// défaut, sauvegarde obligatoire avant toute écriture). Aucun secret n'est
+    /// jamais affiché en clair.
+    Secrets {
+        #[command(subcommand)]
+        action: SecretsCommand,
+    },
 }
 
 /// Regroupe les options de `mnemo search` pour éviter une fonction à trop
@@ -480,5 +491,42 @@ pub enum SessionCommand {
         /// Autorise l'écrasement d'un fichier de sortie existant.
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SecretsCommand {
+    /// Repère les commandes potentiellement sensibles (lecture seule).
+    ///
+    /// Les commandes sont toujours affichées sous forme redactée ; aucun secret
+    /// n'apparaît en clair. N'effectue aucune modification.
+    Scan {
+        /// Nombre maximal de résultats affichés.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+        /// Sortie JSON (sans valeurs sensibles).
+        #[arg(long)]
+        json: bool,
+    },
+    /// Redacte en place les commandes sensibles déjà stockées.
+    ///
+    /// Dry-run par défaut : sans `--apply`, rien n'est modifié. Avec `--apply`,
+    /// une sauvegarde est créée avant toute écriture et seule la colonne
+    /// `command` est mise à jour.
+    Redact {
+        /// Montre ce qui serait redacté sans rien modifier (comportement par
+        /// défaut, accepté explicitement).
+        #[arg(long = "dry-run")]
+        dry_run: bool,
+        /// Applique réellement la redaction (sinon dry-run).
+        #[arg(long)]
+        apply: bool,
+        /// Confirme la redaction sans question interactive.
+        #[arg(long)]
+        yes: bool,
+        /// Force une sauvegarde avant redaction (toujours effectuée avec
+        /// `--apply`, ce drapeau le rend explicite).
+        #[arg(long)]
+        backup: bool,
     },
 }
