@@ -316,6 +316,17 @@ pub enum Command {
         #[command(subcommand)]
         action: MaintenanceCommand,
     },
+
+    /// Navigue, consulte et exporte des sessions de travail.
+    ///
+    /// Une session regroupe les commandes partageant un même `session_id`,
+    /// capturé par l'intégration shell (`MNEMO_SESSION_ID`). Les commandes
+    /// importées ou enregistrées sans cet identifiant ne sont pas rattachées à
+    /// une session.
+    Session {
+        #[command(subcommand)]
+        action: SessionCommand,
+    },
 }
 
 /// Regroupe les options de `mnemo search` pour éviter une fonction à trop
@@ -411,4 +422,47 @@ pub enum StatsIgnoreCommand {
     },
     /// Affiche les commandes actuellement ignorées.
     List,
+}
+
+/// Format d'export d'une session (`mnemo session export`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum SessionFormat {
+    Markdown,
+    Json,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SessionCommand {
+    /// Liste les sessions connues, de la plus récente à la plus ancienne.
+    List {
+        /// Nombre maximal de sessions affichées.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+    },
+    /// Affiche les commandes d'une session, dans l'ordre chronologique.
+    Show {
+        /// Identifiant de session (voir `mnemo session list`).
+        session_id: String,
+        /// Nombre maximal de commandes affichées.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+    },
+    /// Exporte une session en Markdown (défaut) ou JSON.
+    Export {
+        /// Identifiant de session à exporter (incompatible avec `--last`).
+        #[arg(value_name = "SESSION_ID", conflicts_with = "last")]
+        session_id: Option<String>,
+        /// Cible la session la plus récente au lieu d'un identifiant explicite.
+        #[arg(long)]
+        last: bool,
+        /// Format de sortie (`markdown` par défaut).
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: SessionFormat,
+        /// Fichier de sortie (défaut : stdout).
+        #[arg(long, value_name = "FICHIER")]
+        output: Option<PathBuf>,
+        /// Autorise l'écrasement d'un fichier de sortie existant.
+        #[arg(long)]
+        force: bool,
+    },
 }

@@ -17,6 +17,7 @@ mod maintenance;
 mod migrations;
 mod project;
 mod prune;
+mod session;
 mod shell;
 mod stats;
 mod tui;
@@ -175,6 +176,17 @@ fn run() -> Result<()> {
         Command::Maintenance { action } => match action {
             cli::MaintenanceCommand::Status => maintenance::run_status(),
             cli::MaintenanceCommand::Run { dry_run, yes } => maintenance::run(dry_run, yes),
+        },
+        Command::Session { action } => match action {
+            cli::SessionCommand::List { limit } => session::run_list(limit),
+            cli::SessionCommand::Show { session_id, limit } => session::run_show(session_id, limit),
+            cli::SessionCommand::Export {
+                session_id,
+                last,
+                format,
+                output,
+                force,
+            } => session::run_export(session_id, last, format, output, force),
         },
     }
 }

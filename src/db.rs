@@ -353,6 +353,104 @@ fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<CommandRecord> {
     })
 }
 
+/// Résumé d'une session de travail, agrégé depuis les commandes partageant un
+/// même `session_id`.
+#[derive(Debug, Clone)]
+pub struct SessionSummary {
+    pub session_id: String,
+    /// Nombre de commandes rattachées à la session.
+    pub count: i64,
+    /// Horodatage de la première commande (`YYYY-MM-DD HH:MM:SS`).
+    pub started_at: String,
+    /// Horodatage de la dernière commande.
+    pub ended_at: String,
+    /// Racine Git de la commande la plus récente de la session, si disponible.
+    pub git_root: Option<String>,
+}
+
+/// Liste les sessions connues, de la plus récente activité à la plus ancienne.
+///
+/// Seules les commandes portant un `session_id` non vide sont prises en compte ;
+/// les commandes importées ou enregistrées sans identifiant de session sont
+/// ignorées (elles ne constituent pas une session). Grâce au comportement des
+/// colonnes nues de SQLite avec `MAX(created_at)`, `git_root` provient de la
+/// commande la plus récente de chaque session.
+pub fn session_summaries(conn: &Connection, limit: Option<usize>) -> Result<Vec<SessionSummary>> {
+    let limit_sql = match limit {
+        Some(n) => format!("LIMIT {}", n as i64),
+        None => String::new(),
+    };
+    let sql = format!(
+        "SELECT session_id, COUNT(*) AS n,
+                MIN(created_at) AS started, MAX(created_at) AS ended,
+                git_root
+         FROM commands
+         WHERE session_id IS NOT NULL AND TRIM(session_id) <> ''
+         GROUP BY session_id
+         ORDER BY ended DESC, session_id DESC
+         {limit_sql}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], |row| {
+        Ok(SessionSummary {
+            session_id: row.get(0)?,
+            count: row.get(1)?,
+            started_at: row.get(2)?,
+            ended_at: row.get(3)?,
+            git_root: row.get(4)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Charge les commandes d'une session, dans l'ordre chronologique croissant.
+/// `limit` borne le nombre de commandes (`None` = toutes).
+pub fn session_commands(
+    conn: &Connection,
+    session_id: &str,
+    limit: Option<usize>,
+) -> Result<Vec<CommandRecord>> {
+    let limit_sql = match limit {
+        Some(n) => format!("LIMIT {}", n as i64),
+        None => String::new(),
+    };
+    let sql = format!(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands
+         WHERE session_id = ?1
+         ORDER BY created_at ASC, id ASC
+         {limit_sql}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params![session_id], row_to_record)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Identifiant de la session la plus récemment active, le cas échéant.
+pub fn latest_session_id(conn: &Connection) -> Result<Option<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT session_id
+         FROM commands
+         WHERE session_id IS NOT NULL AND TRIM(session_id) <> ''
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1",
+    )?;
+    let mut rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
 /// Nombre total de commandes stockées.
 pub fn count(conn: &Connection) -> Result<i64> {
     let n = conn.query_row("SELECT COUNT(*) FROM commands", [], |row| row.get(0))?;

@@ -35,6 +35,7 @@ qui reste entièrement sur votre machine.
 - 🐧 Cible principale : **Linux et WSL** avec Bash.
 - 🤖 Mode non interactif `--print` (et sorties JSON) pour les scripts et la CI.
 - 🚀 Onboarding guidé `mnemo init --wizard` et complétions shell `bash`, `zsh`, `fish`.
+- 🗂️ Sessions de travail : `mnemo session list/show/export` (Markdown ou JSON).
 
 ---
 
@@ -49,6 +50,7 @@ qui reste entièrement sur votre machine.
   - [Statistiques](#statistiques)
   - [Gestion des données](#gestion-des-données)
   - [Maintenance automatique](#maintenance-automatique)
+  - [Sessions de travail](#sessions-de-travail)
   - [Configuration](#configuration)
   - [Intégration Bash](#intégration-bash)
   - [Complétions shell](#complétions-shell)
@@ -631,6 +633,26 @@ Garanties :
 - `auto_prune_after` accepte les mêmes durées que `mnemo prune`
   (`30d`, `12w`, `6m`, `1y`).
 
+### Sessions de travail
+
+Une **session** regroupe les commandes d'un même shell interactif, identifiées
+par `MNEMO_SESSION_ID`. L'intégration Bash (`mnemo init`) attribue
+automatiquement cet identifiant à chaque shell. Les commandes importées d'un
+ancien historique n'ont pas de session et ne sont donc pas listées.
+
+```bash
+mnemo session list                                  # sessions récentes
+mnemo session show <session_id>                     # commandes d'une session
+mnemo session export --last --output work-session.md
+mnemo session export <session_id> --format json
+```
+
+L'export Markdown produit un document directement réutilisable (métadonnées,
+bloc de commandes, tableau chronologique), utile pour documenter une
+intervention, un TP, un audit ou une procédure. Un fichier de sortie existant
+n'est jamais écrasé sans `--force`. Détails dans
+[docs/SESSIONS.md](docs/SESSIONS.md).
+
 ### Configuration
 
 ```bash
@@ -964,6 +986,9 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo stats [--project <nom>] [--branch <branche>] [--since <durée\|date>] [--json]` | Statistiques d'usage enrichies (totaux, taux d'échec, top commandes / dossiers / projets / shells, activité quotidienne), filtrables (dont `--project current`) et exportables en JSON. |
 | `mnemo project <current\|list>` | Affiche le projet courant (racine Git, marqueur de projet ou dossier) ou la liste des projets connus. |
 | `mnemo maintenance <status\|run>` | État du nettoyage automatique ; `run --dry-run` simule, `run --yes` applique (désactivé par défaut, sauvegarde avant purge). |
+| `mnemo session list [--limit N]` | Liste les sessions de travail (groupées par `session_id`), de la plus récente à la plus ancienne. |
+| `mnemo session show <session_id> [--limit N]` | Affiche les commandes d'une session dans l'ordre chronologique. |
+| `mnemo session export [<session_id>\|--last] [--format markdown\|json] [--output <fichier>] [--force]` | Exporte une session en Markdown (défaut) ou JSON ; stdout par défaut, jamais d'écrasement sans `--force`. |
 | `mnemo config <show\|path\|edit\|validate>` | Affiche, localise, édite (`$EDITOR`, sauvegarde automatique) ou valide la configuration. |
 | `mnemo config stats-ignore <add\|remove\|list> [<cmd>]` | Gère les commandes exclues du « Top commandes » dans `mnemo stats`. |
 | `mnemo list [--limit N] [--project <nom>] [--branch <branche>] [--json]` | Affiche les dernières commandes avec leurs IDs (utile pour `mnemo delete`). |
