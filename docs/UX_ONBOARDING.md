@@ -118,3 +118,11 @@ L'intégration Bash attribue à chaque shell un identifiant de session
 (`MNEMO_SESSION_ID`). Les commandes d'un même shell peuvent ensuite être
 listées, consultées et exportées avec `mnemo session`. Voir
 [docs/SESSIONS.md](SESSIONS.md) pour le détail.
+
+Une intégration installée avant l'arrivée de `mnemo session` ne capture pas
+encore `MNEMO_SESSION_ID`. La commande `mnemo shell upgrade` met à niveau le
+bloc existant dans `~/.bashrc` (sauvegarde automatique, remplacement du seul
+bloc mnemo, reste du fichier intact), puis il suffit de recharger le shell avec
+`source ~/.bashrc`. `mnemo doctor` détecte ce cas et propose la commande ; le
+wizard `mnemo init --wizard` propose également la mise à niveau.
+

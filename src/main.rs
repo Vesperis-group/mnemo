@@ -108,6 +108,9 @@ fn run() -> Result<()> {
             print!("{}", shell::bashrc_snippet());
             Ok(())
         }
+        Command::Shell { action } => match action {
+            cli::ShellCommand::Upgrade => init::run_shell_upgrade(),
+        },
         Command::Migrate => cmd_migrate(),
         Command::Stats {
             project,

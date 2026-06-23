@@ -123,6 +123,12 @@ pub enum Command {
     /// Affiche le snippet d'intégration Bash à ajouter dans ~/.bashrc.
     Bashrc,
 
+    /// Gère l'intégration shell installée dans ~/.bashrc.
+    Shell {
+        #[command(subcommand)]
+        action: ShellCommand,
+    },
+
     /// Applique les migrations de schéma SQLite en attente.
     Migrate,
 
@@ -422,6 +428,16 @@ pub enum StatsIgnoreCommand {
     },
     /// Affiche les commandes actuellement ignorées.
     List,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ShellCommand {
+    /// Met à niveau l'intégration Bash installée dans ~/.bashrc.
+    ///
+    /// Remplace un bloc obsolète par la version courante (capture de
+    /// `MNEMO_SESSION_ID` pour `mnemo session`), après sauvegarde et sans
+    /// toucher au reste du fichier. Sans bloc installé, propose `mnemo init`.
+    Upgrade,
 }
 
 /// Format d'export d'une session (`mnemo session export`).

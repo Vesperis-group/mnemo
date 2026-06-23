@@ -213,6 +213,14 @@ fn apply_fixes(report: &mut Report) -> Result<()> {
                     "Raccourci Ctrl+R restauré dans le bloc mnemo (sauvegarde créée)",
                 );
             }
+            Ok(shell::BlockRepair::Upgraded) => {
+                fixes += 1;
+                report.push(
+                    "fix.bashrc",
+                    Status::Ok,
+                    "Bloc mnemo obsolète mis à niveau (sessions activées, sauvegarde créée)",
+                );
+            }
             Ok(shell::BlockRepair::AlreadyOk) => report.push(
                 "fix.bashrc",
                 Status::Info,
@@ -620,6 +628,20 @@ fn check_bashrc(report: &mut Report) {
                 "bashrc.ctrl_r",
                 Status::Warn,
                 "Raccourci Ctrl+R absent du bloc mnemo",
+            );
+        }
+
+        if shell::block_state(&content) == shell::BlockState::Legacy {
+            report.push(
+                "bashrc.version",
+                Status::Warn,
+                "Bloc d'intégration mnemo obsolète : il ne capture pas MNEMO_SESSION_ID, requis par `mnemo session`. Lancez `mnemo shell upgrade`.",
+            );
+        } else {
+            report.push(
+                "bashrc.version",
+                Status::Ok,
+                "Intégration Bash à jour (sessions activées)",
             );
         }
     } else {
