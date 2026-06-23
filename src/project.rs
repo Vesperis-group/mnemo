@@ -1,7 +1,7 @@
 //! Détection du « projet » courant et inventaire des projets connus.
 //!
 //! Stratégie de détection (du plus fiable au plus approximatif) :
-//! 1. **Racine Git** (`git rev-parse --show-toplevel`) - priorité absolue ;
+//! 1. **Racine Git** (`git rev-parse --show-toplevel`), priorité absolue ;
 //! 2. **Fichier marqueur** (`package.json`, `Cargo.toml`, `pyproject.toml`,
 //!    `go.mod`, `composer.json`) trouvé en remontant l'arborescence ;
 //! 3. **Nom du dossier courant** en dernier recours.

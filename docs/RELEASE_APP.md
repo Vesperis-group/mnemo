@@ -124,7 +124,7 @@ Dans **`mnemo` → Settings → Secrets and variables → Actions** :
 Les rulesets protègent `main` et les tags `v*` (voir
 [`REPOSITORY_RULES.md`](REPOSITORY_RULES.md)). Pour que le workflow puisse
 pousser le commit de release et le tag, l'App doit être autorisée à **contourner**
-ces protections — et **elle seule** :
+ces protections, et **elle seule** :
 
 - ruleset **« Protect main »** → **Bypass list** → **Add bypass** →
   sélectionner l'App `vesperis-mnemo-release`.

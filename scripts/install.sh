@@ -115,7 +115,7 @@ http_to_stdout() {
 }
 
 # ---------------------------------------------------------------------------
-# Vérification Sigstore (cosign) - OPTIONNELLE.
+# Vérification Sigstore (cosign), OPTIONNELLE.
 #
 # Le SHA-256 (vérifié juste avant l'appel) reste l'unique contrôle obligatoire.
 # Cette étape est une défense en profondeur :
