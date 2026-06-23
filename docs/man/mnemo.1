@@ -44,6 +44,20 @@ mnemo n'écrit jamais dans vos fichiers shell : redirigez vous-même la sortie.
 .B import
 Importe l'historique Bash existant dans la base.
 .TP
+.B session list
+Liste les sessions de travail (commandes groupées par
+.IR session_id ).
+.TP
+.B session show \fISESSION_ID\fR
+Affiche les commandes d'une session dans l'ordre chronologique.
+.TP
+.B session export [\fISESSION_ID\fR|--last] [--format markdown|json] [--output \fIFICHIER\fR] [--force]
+Exporte une session en Markdown (défaut) ou JSON. Écrit sur la sortie standard
+sauf si
+.B --output
+est fourni ; n'écrase jamais un fichier existant sans
+.BR --force .
+.TP
 .B search
 Recherche dans l'historique enregistré.
 .TP
@@ -78,4 +92,4 @@ Installer la complétion Zsh :
 .BR bash (1),
 .BR sqlite3 (1)
 .PP
-Documentation : docs/UX_ONBOARDING.md
+Documentation : docs/UX_ONBOARDING.md, docs/SESSIONS.md

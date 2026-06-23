@@ -152,6 +152,11 @@ pub fn repair_block(bashrc: &std::path::Path) -> anyhow::Result<BlockRepair> {
 }
 
 const SNIPPET: &str = r#"# >>> mnemo >>>
+# Identifiant de session : regroupe les commandes d'un même shell interactif
+# (voir `mnemo session`). Conservé pour toute la durée de vie du shell.
+if [ -z "${MNEMO_SESSION_ID:-}" ]; then
+    export MNEMO_SESSION_ID="$(date +%Y%m%dT%H%M%S)-$$"
+fi
 # Enregistre automatiquement chaque commande dans mnemo.
 __mnemo_record() {
     local __mnemo_exit=$?

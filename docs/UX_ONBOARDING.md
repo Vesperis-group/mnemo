@@ -111,3 +111,10 @@ man ./docs/man/mnemo.1
 
 Elle couvre les commandes principales, les fichiers utilisés, les considérations
 de sécurité et des exemples.
+
+## Sessions de travail
+
+L'intégration Bash attribue à chaque shell un identifiant de session
+(`MNEMO_SESSION_ID`). Les commandes d'un même shell peuvent ensuite être
+listées, consultées et exportées avec `mnemo session`. Voir
+[docs/SESSIONS.md](SESSIONS.md) pour le détail.
