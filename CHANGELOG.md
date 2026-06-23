@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.1.0](https://github.com/Vesperis-group/mnemo/compare/v1.0.4...v1.1.0) (2026-06-23)
+
+### Features
+
+* add onboarding wizard and shell completions ([#27](https://github.com/Vesperis-group/mnemo/issues/27)) ([45bf4f0](https://github.com/Vesperis-group/mnemo/commit/45bf4f0356f54bb0fbf625f9dafc7ad18b6ae501))
+
 ## [1.0.4](https://github.com/Vesperis-group/mnemo/compare/v1.0.3...v1.0.4) (2026-06-23)
 
 ## [1.0.3](https://github.com/Vesperis-group/mnemo/compare/v1.0.2...v1.0.3) (2026-06-23)
