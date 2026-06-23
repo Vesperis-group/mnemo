@@ -36,6 +36,7 @@ qui reste entièrement sur votre machine.
 - 🤖 Mode non interactif `--print` (et sorties JSON) pour les scripts et la CI.
 - 🚀 Onboarding guidé `mnemo init --wizard` et complétions shell `bash`, `zsh`, `fish`.
 - 🗂️ Sessions de travail : `mnemo session list/show/export` (Markdown ou JSON).
+- 🛡️ Nettoyage des secrets de l'historique : `mnemo secrets scan/redact` (dry-run par défaut).
 
 ---
 
@@ -51,6 +52,7 @@ qui reste entièrement sur votre machine.
   - [Gestion des données](#gestion-des-données)
   - [Maintenance automatique](#maintenance-automatique)
   - [Sessions de travail](#sessions-de-travail)
+  - [Nettoyage des secrets](#nettoyage-des-secrets)
   - [Configuration](#configuration)
   - [Intégration Bash](#intégration-bash)
   - [Complétions shell](#complétions-shell)
@@ -659,6 +661,34 @@ n'est jamais écrasé sans `--force`. Détails dans
 > puis rechargez le shell avec `source ~/.bashrc`. `mnemo doctor` signale aussi
 > ce cas et propose la commande.
 
+### Nettoyage des secrets
+
+À l'enregistrement, `mnemo` ignore déjà les commandes sensibles (voir
+`sensitive_keywords`). `mnemo secrets` traite l'historique **déjà stocké**, par
+exemple importé d'un `~/.bash_history` antérieur à l'installation.
+
+```bash
+mnemo secrets scan                 # liste les commandes suspectes (toujours redactées)
+mnemo secrets scan --json          # même résultat en JSON, sans aucune valeur en clair
+mnemo secrets redact               # dry-run : montre ce qui serait nettoyé, ne modifie rien
+mnemo secrets redact --apply --yes # redacte en base après sauvegarde automatique
+```
+
+Garanties :
+
+- Aucune valeur sensible n'est jamais affichée en clair, ni en texte ni en JSON.
+  En cas de doute, la commande entière devient `[REDACTED COMMAND]`.
+- `redact` est en dry-run par défaut ; `--apply` est requis pour écrire.
+- Une sauvegarde complète est créée **avant** toute écriture ; si elle échoue,
+  rien n'est modifié.
+- Seule la colonne `command` est réécrite ; horodatage, dossier, code de sortie
+  et contexte Git sont conservés.
+
+La détection est heuristique (jetons `Bearer`, affectations `PASSWORD=`/`TOKEN=`,
+URLs `user:motdepasse@hôte`, options `--password`/`--token`, mot de passe attaché
+des clients SQL, fragments de clé privée) : protection raisonnable, pas
+exhaustivité. Détails dans [docs/SECRETS.md](docs/SECRETS.md).
+
 ### Configuration
 
 ```bash
@@ -996,6 +1026,8 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo session list [--limit N]` | Liste les sessions de travail (groupées par `session_id`), de la plus récente à la plus ancienne. |
 | `mnemo session show <session_id> [--limit N]` | Affiche les commandes d'une session dans l'ordre chronologique. |
 | `mnemo session export [<session_id>\|--last] [--format markdown\|json] [--output <fichier>] [--force]` | Exporte une session en Markdown (défaut) ou JSON ; stdout par défaut, jamais d'écrasement sans `--force`. |
+| `mnemo secrets scan [--limit N] [--json]` | Repère dans l'historique stocké les commandes potentiellement sensibles, toujours affichées redactées (lecture seule). |
+| `mnemo secrets redact [--apply] [--yes] [--backup]` | Redacte en place les commandes sensibles ; dry-run par défaut, sauvegarde obligatoire avant écriture, seule la colonne `command` est modifiée. |
 | `mnemo config <show\|path\|edit\|validate>` | Affiche, localise, édite (`$EDITOR`, sauvegarde automatique) ou valide la configuration. |
 | `mnemo config stats-ignore <add\|remove\|list> [<cmd>]` | Gère les commandes exclues du « Top commandes » dans `mnemo stats`. |
 | `mnemo list [--limit N] [--project <nom>] [--branch <branche>] [--json]` | Affiche les dernières commandes avec leurs IDs (utile pour `mnemo delete`). |
