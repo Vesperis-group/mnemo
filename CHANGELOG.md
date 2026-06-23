@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.2.0](https://github.com/Vesperis-group/mnemo/compare/v1.1.0...v1.2.0) (2026-06-23)
+
+### Features
+
+* add session browsing and export ([#28](https://github.com/Vesperis-group/mnemo/issues/28)) ([eb85542](https://github.com/Vesperis-group/mnemo/commit/eb855422bf73ea36589b03b14ea3db86e36451b4))
+
 ## [1.1.0](https://github.com/Vesperis-group/mnemo/compare/v1.0.4...v1.1.0) (2026-06-23)
 
 ### Features
