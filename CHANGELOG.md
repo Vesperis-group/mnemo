@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.3.0](https://github.com/Vesperis-group/mnemo/compare/v1.2.0...v1.3.0) (2026-06-23)
+
+### Features
+
+* upgrade legacy shell integration ([#29](https://github.com/Vesperis-group/mnemo/issues/29)) ([dfbcdac](https://github.com/Vesperis-group/mnemo/commit/dfbcdacc0cc374b43a3492d6e4b6829bc4799b0d))
+
 ## [1.2.0](https://github.com/Vesperis-group/mnemo/compare/v1.1.0...v1.2.0) (2026-06-23)
 
 ### Features
