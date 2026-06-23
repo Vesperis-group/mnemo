@@ -1,6 +1,6 @@
 {
   "name": "mnemo-release-tooling",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Outillage de release (release-it) pour le projet Rust mnemo. Aucune publication npm.",
   "scripts": {
