@@ -1,6 +1,7 @@
 mod archive;
 mod backup;
 mod cli;
+mod completions;
 mod config;
 mod confirm;
 mod db;
@@ -9,6 +10,7 @@ mod export;
 mod filter;
 mod gitctx;
 mod importer;
+mod init;
 mod lifecycle;
 mod list;
 mod maintenance;
@@ -58,7 +60,8 @@ fn is_broken_pipe_error(err: &(dyn std::error::Error + 'static)) -> bool {
 fn run() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Init => cmd_init(),
+        Command::Init { wizard, yes } => init::run(wizard, yes),
+        Command::Completions { shell } => completions::run(shell),
         Command::Import { file } => cmd_import(file),
         Command::Add {
             cmd,
@@ -174,31 +177,6 @@ fn run() -> Result<()> {
             cli::MaintenanceCommand::Run { dry_run, yes } => maintenance::run(dry_run, yes),
         },
     }
-}
-
-fn cmd_init() -> Result<()> {
-    let cfg_path = config::config_path()?;
-    if cfg_path.exists() {
-        println!("Configuration existante : {}", cfg_path.display());
-    } else {
-        config::Config::default().save(&cfg_path)?;
-        println!("Configuration créée : {}", cfg_path.display());
-    }
-    // Idempotent : resserre les permissions même si la config préexistait.
-    config::harden_file(&cfg_path);
-
-    let db_path = config::db_path()?;
-    db::open(&db_path)?;
-    config::harden_file(&db_path);
-    println!("Base de données : {}", db_path.display());
-
-    println!();
-    println!("Ajoutez ces lignes à votre ~/.bashrc :");
-    println!("------------------------------------------------------------");
-    print!("{}", shell::bashrc_snippet());
-    println!("------------------------------------------------------------");
-    println!("Puis rechargez : source ~/.bashrc");
-    Ok(())
 }
 
 fn cmd_import(file: Option<PathBuf>) -> Result<()> {

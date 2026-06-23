@@ -20,7 +20,7 @@ SHELL_SCRIPTS := \
 .DEFAULT_GOAL := build
 .PHONY: build release test lint fmt check audit security-check release-check \
         shellcheck actionlint sast security-full \
-        sbom sign-check install uninstall clean help
+        sbom sign-check install uninstall man clean help
 
 ## build : compilation en mode debug
 build:
@@ -159,6 +159,10 @@ install:
 ## uninstall : désinstalle via scripts/uninstall.sh
 uninstall:
 	bash scripts/uninstall.sh
+
+## man : affiche la page de manuel locale (docs/man/mnemo.1)
+man:
+	man ./docs/man/mnemo.1
 
 ## clean : nettoie les artefacts de compilation
 clean:
