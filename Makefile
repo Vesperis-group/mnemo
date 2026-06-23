@@ -7,8 +7,19 @@ BINDIR ?= $(PREFIX)/bin
 BIN    := target/release/mnemo
 MUSL_TARGET := x86_64-unknown-linux-musl
 
+# Scripts shell du dépôt (analysés par bash -n et ShellCheck).
+SHELL_SCRIPTS := \
+	scripts/install.sh \
+	scripts/uninstall.sh \
+	scripts/package-release.sh \
+	scripts/generate-sbom.sh \
+	scripts/checksums-release.sh \
+	scripts/sign-release.sh \
+	scripts/lib/bashrc.sh
+
 .DEFAULT_GOAL := build
 .PHONY: build release test lint fmt check audit security-check release-check \
+        shellcheck actionlint sast security-full \
         sbom sign-check install uninstall clean help
 
 ## build : compilation en mode debug
@@ -56,6 +67,55 @@ audit:
 
 ## security-check : alias de `audit`
 security-check: audit
+
+## shellcheck : analyse statique des scripts shell (ShellCheck requis)
+shellcheck:
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+		echo "!! shellcheck absent - https://github.com/koalaman/shellcheck (ou: apt-get install shellcheck)"; exit 1; \
+	fi
+	@echo "==> ShellCheck"
+	shellcheck $(SHELL_SCRIPTS)
+
+## actionlint : lint statique des workflows GitHub Actions (actionlint requis)
+actionlint:
+	@if ! command -v actionlint >/dev/null 2>&1; then \
+		echo "!! actionlint absent - https://github.com/rhysd/actionlint (go install / binaire épinglé)"; exit 1; \
+	fi
+	@echo "==> actionlint"
+	actionlint
+
+## sast : analyse statique locale (clippy strict + shellcheck + actionlint)
+# CodeQL (SAST Rust approfondi) tourne en CI via .github/workflows/codeql.yml.
+sast: 
+	@echo "==> SAST local (clippy + shellcheck + actionlint)"
+	$(CARGO) clippy --all-targets --all-features -- -D warnings
+	$(MAKE) shellcheck
+	$(MAKE) actionlint
+
+## security-full : porte de sécurité complète (audit supply chain + lint infra)
+# Échoue si un outil requis est absent (gate volontairement strict, contrairement
+# à `audit` qui est tolérant). Outils attendus : cargo-audit, cargo-deny,
+# cargo-machete, gitleaks, shellcheck, actionlint.
+security-full:
+	@echo "==> Security-full : audit supply chain + ShellCheck + actionlint"
+	@if ! command -v cargo-audit >/dev/null 2>&1; then \
+		echo "!! cargo-audit absent - 'cargo install cargo-audit'"; exit 1; fi
+	@if ! command -v cargo-deny >/dev/null 2>&1; then \
+		echo "!! cargo-deny absent - 'cargo install cargo-deny'"; exit 1; fi
+	@if ! command -v cargo-machete >/dev/null 2>&1; then \
+		echo "!! cargo-machete absent - 'cargo install cargo-machete'"; exit 1; fi
+	@if ! command -v gitleaks >/dev/null 2>&1; then \
+		echo "!! gitleaks absent - https://github.com/gitleaks/gitleaks"; exit 1; fi
+	@echo "--- cargo audit"
+	$(CARGO) audit
+	@echo "--- cargo deny check"
+	$(CARGO) deny check
+	@echo "--- cargo machete"
+	$(CARGO) machete
+	@echo "--- gitleaks detect"
+	gitleaks detect --source . --redact --verbose
+	$(MAKE) shellcheck
+	$(MAKE) actionlint
 
 ## release-check : porte de qualité complète avant release
 release-check:

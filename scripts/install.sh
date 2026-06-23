@@ -218,6 +218,7 @@ finalize_install() {
         *)
             warn "${BIN_DIR} n'est pas dans votre PATH."
             warn "Ajoutez ceci à votre ~/.bashrc :"
+            # shellcheck disable=SC2016 # texte littéral à copier : l'expansion n'est pas voulue
             warn '  export PATH="$HOME/.local/bin:$PATH"' ;;
     esac
 
@@ -342,6 +343,7 @@ main() {
 # l'installation. En usage normal (exécution directe ou `curl | bash`), la
 # variable n'est pas définie et `main` s'exécute.
 if [ "${MNEMO_LIB_ONLY:-0}" = "1" ]; then
+    # shellcheck disable=SC2317 # 'exit' atteignable en exécution directe (return n'agit que sous `source`)
     return 0 2>/dev/null || exit 0
 fi
 

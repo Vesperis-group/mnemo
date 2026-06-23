@@ -1,0 +1,80 @@
+name: Lint (workflows & shell)
+
+# Vérifie la qualité des fichiers d'infrastructure :
+#   - actionlint : lint statique des workflows GitHub Actions.
+#   - ShellCheck : analyse statique des scripts shell.
+#
+# Indépendant de la CI Rust pour ne pas allonger le cycle build/test, et exécuté
+# sur les PR comme sur les push vers main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Permissions minimales : lecture seule du dépôt.
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
+# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
+# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
+#
+# actionlint et ShellCheck sont installés en VERSION EXACTE, avec vérification
+# du checksum SHA-256 AVANT exécution (pas de `curl | bash`, pas de binaire
+# exécuté si l'empreinte ne correspond pas). Pour mettre à jour une version :
+# récupérer le SHA-256 depuis le fichier de checksums de la release amont.
+# ---------------------------------------------------------------------------
+
+jobs:
+  actionlint:
+    name: actionlint (workflows)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install actionlint (checksum vérifié)
+        run: |
+          set -euo pipefail
+          ACTIONLINT_VERSION="1.7.7"
+          ACTIONLINT_SHA256="023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+          curl -fsSL \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/actionlint.tar.gz
+          echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          sudo install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+          actionlint --version
+
+      - name: Run actionlint
+        run: actionlint -color
+
+  shellcheck:
+    name: ShellCheck (scripts)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install ShellCheck (checksum vérifié)
+        run: |
+          set -euo pipefail
+          SHELLCHECK_VERSION="0.11.0"
+          SHELLCHECK_SHA256="8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+          curl -fsSL \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz" \
+            -o /tmp/shellcheck.tar.xz
+          echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          sudo install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+
+      - name: Run ShellCheck
+        run: shellcheck scripts/*.sh scripts/lib/*.sh
