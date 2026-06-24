@@ -85,11 +85,12 @@ pub enum Command {
         /// N'affiche que les commandes en échec (exit_code ≠ 0).
         #[arg(long, conflicts_with = "exit_code")]
         failed: bool,
-        /// Limite l'âge des résultats (durée `7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
+        /// Limite l'âge des résultats (durée `24h`/`7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
         #[arg(long, value_name = "DURÉE|DATE")]
         since: Option<String>,
         /// N'affiche que les commandes antérieures à une date (`AAAA-MM-JJ`).
-        #[arg(long, value_name = "DATE")]
+        /// Alias : `--until`.
+        #[arg(long, visible_alias = "until", value_name = "DATE")]
         before: Option<String>,
         /// Filtre sur un répertoire de travail exact.
         #[arg(long, value_name = "CHEMIN")]
@@ -97,9 +98,13 @@ pub enum Command {
         /// Filtre sur un shell exact (ex : bash, zsh).
         #[arg(long, value_name = "SHELL")]
         shell: Option<String>,
-        /// Avec --print, produit une sortie JSON stable.
+        /// Produit une sortie JSON stable (implique le mode non interactif).
         #[arg(long)]
         json: bool,
+        /// N'affiche que les identifiants, un par ligne (implique le mode non
+        /// interactif). Pratique pour chaîner avec `mnemo show`/`mnemo print`.
+        #[arg(long = "id-only", conflicts_with = "json")]
+        id_only: bool,
     },
 
     /// Ouvre la TUI avancée (interface interactive principale).
@@ -140,7 +145,7 @@ pub enum Command {
         /// Filtre sur une branche Git.
         #[arg(long, value_name = "BRANCHE")]
         branch: Option<String>,
-        /// Limite la fenêtre d'analyse (durée `7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
+        /// Limite la fenêtre d'analyse (durée `24h`/`7d`/`2w`/`3m`/`1y` ou date `AAAA-MM-JJ`).
         #[arg(long, value_name = "DURÉE|DATE")]
         since: Option<String>,
         /// Produit une sortie JSON exploitable.
@@ -219,6 +224,26 @@ pub enum Command {
         /// Produit une sortie JSON exploitable.
         #[arg(long)]
         json: bool,
+    },
+
+    /// Affiche le détail complet d'une commande par son ID, sans l'exécuter.
+    ///
+    /// mnemo n'exécute jamais une commande de l'historique : `show` se contente
+    /// de lire la base. Si la commande a déjà été redactée, sa forme redactée
+    /// stockée est affichée telle quelle.
+    Show {
+        /// Identifiant de la commande (voir `mnemo list` ou `mnemo search`).
+        id: i64,
+    },
+
+    /// Imprime uniquement la commande brute sur stdout, sans décor ni exécution.
+    ///
+    /// Aucun label, aucune couleur : la sortie peut être copiée ou redirigée.
+    /// mnemo n'exécute jamais la commande ; l'utilisateur reste responsable de
+    /// ce qu'il fait de la sortie.
+    Print {
+        /// Identifiant de la commande (voir `mnemo list` ou `mnemo search`).
+        id: i64,
     },
 
     /// Supprime une commande par son ID (après confirmation).
@@ -362,6 +387,7 @@ pub struct SearchArgs {
     pub cwd: Option<String>,
     pub shell: Option<String>,
     pub json: bool,
+    pub id_only: bool,
 }
 
 /// Shells supportés par `mnemo completions`. Limité volontairement à bash, zsh

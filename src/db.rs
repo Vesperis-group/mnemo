@@ -629,8 +629,8 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Résout une borne inférieure `--since` : durée (`7d`, `2w`, `3m`, `1y`) ou
-/// date `AAAA-MM-JJ`. Renvoie `None` si la spec est invalide (**jamais de
+/// Résout une borne inférieure `--since` : durée (`24h`, `7d`, `2w`, `3m`, `1y`)
+/// ou date `AAAA-MM-JJ`. Renvoie `None` si la spec est invalide (**jamais de
 /// panique**) : l'appelant peut alors ignorer le filtre proprement.
 pub fn resolve_since(spec: &str) -> Option<String> {
     let spec = spec.trim();

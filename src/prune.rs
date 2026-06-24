@@ -18,28 +18,30 @@ use crate::{backup, config, confirm, db, list};
 /// Nombre d'exemples affichés en aperçu d'un `prune`.
 const PREVIEW_SAMPLES: usize = 5;
 
-/// Convertit une durée lisible (`30d`, `12w`, `6m`, `1y`) en secondes.
+/// Convertit une durée lisible (`24h`, `30d`, `12w`, `6m`, `1y`) en secondes.
 ///
 /// Approximations documentées : `w` = 7 jours, `m` = 30 jours, `y` = 365 jours.
 pub fn parse_duration(spec: &str) -> Result<u64> {
+    const HOUR: u64 = 3_600;
     const DAY: u64 = 86_400;
     let spec = spec.trim();
     if spec.len() < 2 {
-        bail!("durée invalide : {spec:?} (exemples : 30d, 12w, 6m, 1y)");
+        bail!("durée invalide : {spec:?} (exemples : 24h, 30d, 12w, 6m, 1y)");
     }
     let (num, unit) = spec.split_at(spec.len() - 1);
     let n: u64 = num
         .parse()
-        .with_context(|| format!("durée invalide : {spec:?} (exemples : 30d, 12w, 6m, 1y)"))?;
+        .with_context(|| format!("durée invalide : {spec:?} (exemples : 24h, 30d, 12w, 6m, 1y)"))?;
     if n == 0 {
         bail!("durée invalide : {spec:?} (doit être strictement positive)");
     }
     let secs = match unit {
+        "h" => n * HOUR,
         "d" => n * DAY,
         "w" => n * 7 * DAY,
         "m" => n * 30 * DAY,
         "y" => n * 365 * DAY,
-        other => bail!("unité de durée inconnue : {other:?} (utilisez d, w, m ou y)"),
+        other => bail!("unité de durée inconnue : {other:?} (utilisez h, d, w, m ou y)"),
     };
     Ok(secs)
 }
@@ -145,6 +147,7 @@ mod tests {
     #[test]
     fn parse_duration_valide() {
         const DAY: u64 = 86_400;
+        assert_eq!(parse_duration("24h").unwrap(), 24 * 3_600);
         assert_eq!(parse_duration("30d").unwrap(), 30 * DAY);
         assert_eq!(parse_duration("12w").unwrap(), 12 * 7 * DAY);
         assert_eq!(parse_duration("6m").unwrap(), 6 * 30 * DAY);
