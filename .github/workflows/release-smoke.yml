@@ -1,0 +1,218 @@
+# Smoke tests post-release : verifient qu'une release publiee est reellement
+# installable et utilisable par un utilisateur final, via le chemin officiel
+# scripts/install.sh. Ce workflow ne publie rien et n'a que des permissions
+# en lecture seule ; il ne duplique pas la logique de signature/provenance de
+# release.yml (smoke test d'installation, pas re-verification cosign complete).
+#
+# Actions tierces epinglees par SHA de commit complet (jamais de tag flottant).
+# Pour mettre a jour une action :
+#   git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>
+# puis remplacer le SHA et le commentaire `# <tag>`. Pour un tag annote, utiliser
+# la ligne `<sha> refs/tags/<tag>^{}` (objet commit dereference).
+name: Release smoke tests
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag de release a tester, par exemple v1.6.0 (defaut : derniere release)"
+        required: false
+        type: string
+  schedule:
+    # Tous les lundis a 06h00 UTC : revalide la derniere release publiee.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-smoke-${{ github.event.release.tag_name || github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-version:
+    name: Resolution du tag de release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resoudre le tag a tester
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=""
+          case "${EVENT_NAME}" in
+            release)
+              version="${RELEASE_TAG}"
+              ;;
+            workflow_dispatch)
+              version="${INPUT_VERSION}"
+              ;;
+          esac
+          if [ -z "${version}" ]; then
+            # schedule, ou dispatch sans entree : derniere release publiee.
+            version="$(gh release view --repo "${REPO}" --json tagName --jq '.tagName')"
+          fi
+          case "${version}" in
+            v*) : ;;
+            *) version="v${version}" ;;
+          esac
+          if [ -z "${version}" ] || [ "${version}" = "v" ]; then
+            echo "Impossible de resoudre un tag de release a tester." >&2
+            exit 1
+          fi
+          echo "Testing mnemo release: ${version}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  install-smoke:
+    name: Installation ${{ matrix.label }}
+    needs: resolve-version
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: glibc
+            target: x86_64-unknown-linux-gnu-glibc2.35
+            runner: ubuntu-22.04
+          - label: musl
+            target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+    env:
+      MNEMO_VERSION: ${{ needs.resolve-version.outputs.version }}
+      MNEMO_TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Installer mnemo via scripts/install.sh
+        env:
+          # HOME temporaire et isole : aucune ecriture dans le vrai HOME du runner.
+          HOME: ${{ runner.temp }}/mnemo-smoke-home
+          MNEMO_ASSUME_YES: "1"
+          MNEMO_NO_BASHRC: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}"
+          echo "Testing mnemo release: ${MNEMO_VERSION} (${MNEMO_TARGET})"
+          bash scripts/install.sh
+          test -x "${HOME}/.local/bin/mnemo"
+
+      - name: Smoke test des commandes principales
+        env:
+          HOME: ${{ runner.temp }}/mnemo-smoke-home
+        run: |
+          set -euo pipefail
+          export PATH="${HOME}/.local/bin:${PATH}"
+
+          # Version installee == tag teste.
+          mnemo version
+          installed="$(mnemo version | head -n1)"
+          expected="${MNEMO_VERSION#v}"
+          echo "${installed}" | grep -Fq "${expected}" || {
+            echo "Version installee inattendue : '${installed}' (attendu : ${expected})" >&2
+            exit 1
+          }
+
+          # init est deja execute par install.sh ; on reverifie l'idempotence.
+          mnemo init
+          mnemo doctor
+
+          mnemo completions bash >/dev/null
+          mnemo completions zsh >/dev/null
+          mnemo completions fish >/dev/null
+
+          mnemo --help >/dev/null
+          mnemo search --help >/dev/null
+          mnemo session --help >/dev/null
+          mnemo secrets --help >/dev/null
+          mnemo project --help >/dev/null
+          mnemo uninstall --help >/dev/null
+
+          # Cycle de vie reel : ajout, recherche, inspection.
+          mnemo add --cmd "echo hello" --exit-code 0
+          id="$(mnemo search hello --id-only | head -n1)"
+          test -n "${id}"
+          mnemo show "${id}"
+          # `mnemo print` est consulte mais sa sortie n'est JAMAIS executee.
+          mnemo print "${id}" >/dev/null
+
+          mnemo secrets scan
+          mnemo project list
+
+      - name: Desinstallation propre
+        env:
+          HOME: ${{ runner.temp }}/mnemo-smoke-home
+        run: |
+          set -euo pipefail
+          export PATH="${HOME}/.local/bin:${PATH}"
+          mnemo uninstall --yes --purge
+          if [ -e "${HOME}/.local/bin/mnemo" ]; then
+            echo "Le binaire n'a pas ete supprime par uninstall." >&2
+            exit 1
+          fi
+
+  asset-checksum-smoke:
+    name: Verification des assets et checksums
+    needs: resolve-version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MNEMO_VERSION: ${{ needs.resolve-version.outputs.version }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Telecharger les archives et le fichier de checksums
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          cd assets
+          glibc="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-gnu-glibc2.35.tar.gz"
+          musl="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          checks="mnemo-${MNEMO_VERSION}-checksums.txt"
+          gh release download "${MNEMO_VERSION}" --repo "${REPO}" \
+            --pattern "${glibc}" \
+            --pattern "${musl}" \
+            --pattern "${checks}"
+          ls -l
+
+      - name: Verifier les empreintes SHA-256
+        run: |
+          set -euo pipefail
+          cd assets
+          glibc="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-gnu-glibc2.35.tar.gz"
+          musl="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          checks="mnemo-${MNEMO_VERSION}-checksums.txt"
+          # On ne valide que les deux archives (le SBOM n'est pas telecharge ici).
+          grep -E "  (${glibc}|${musl})$" "${checks}" > to-verify.txt
+          test "$(wc -l < to-verify.txt)" -eq 2
+          sha256sum -c to-verify.txt
+
+      - name: Extraire et executer chaque binaire
+        run: |
+          set -euo pipefail
+          cd assets
+          for archive in mnemo-"${MNEMO_VERSION}"-*.tar.gz; do
+            echo "== ${archive} =="
+            dir="extract-$(basename "${archive}" .tar.gz)"
+            mkdir -p "${dir}"
+            tar -xzf "${archive}" -C "${dir}"
+            bin="$(find "${dir}" -type f -name mnemo | head -n1)"
+            test -n "${bin}"
+            chmod +x "${bin}"
+            "${bin}" version
+            "${bin}" version | head -n1 | grep -Fq "${MNEMO_VERSION#v}"
+          done

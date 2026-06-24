@@ -1161,7 +1161,9 @@ mnemo est outillé comme un vrai projet DevSecOps :
 - **CI/CD** : `ci.yml` (fmt/clippy/test/build, permissions en lecture seule),
   `audit.yml` (cargo-audit, cargo-deny, cargo-machete, gitleaks sur PR et push
   main), `codeql.yml` (SAST Rust), `lint.yml` (actionlint et ShellCheck),
-  `release.yml` (release automatique au merge, permissions scopées).
+  `release.yml` (release automatique au merge, permissions scopées),
+  `release-smoke.yml` (smoke tests d'installation post-release, lecture seule,
+  ne publie rien — voir [docs/CI_CD.md](docs/CI_CD.md)).
 - **Politique des dépendances** dans [deny.toml](deny.toml) : licences
   permissives autorisées uniquement, refus des vulnérabilités RustSec, contrôle
   des sources. `RUSTSEC-2024-0436` (`paste`) est accepté temporairement car
