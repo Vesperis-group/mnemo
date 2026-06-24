@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [1.4.0](https://github.com/Vesperis-group/mnemo/compare/v1.3.0...v1.4.0) (2026-06-24)
+
+### Features
+
+* add local secrets scanning and redaction ([#30](https://github.com/Vesperis-group/mnemo/issues/30)) ([be083f0](https://github.com/Vesperis-group/mnemo/commit/be083f0646c50677bdf53041c0d532d49c210f54))
+
+### Bug Fixes
+
+* silence gitleaks false positive on secrets test fixture ([#32](https://github.com/Vesperis-group/mnemo/issues/32)) ([3f7c14b](https://github.com/Vesperis-group/mnemo/commit/3f7c14b51fc368295bd0a055f3588ef6281b5209))
+
 ## [1.3.0](https://github.com/Vesperis-group/mnemo/compare/v1.2.0...v1.3.0) (2026-06-23)
 
 ### Features
