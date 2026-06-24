@@ -93,7 +93,8 @@ score gaming.
 - **État** : Scorecard ne détecte aucune organisation contributrice (le score
   reflète des contributions issues de plusieurs entreprises ou organisations).
 - **Action saine** : améliorer l'accueil contributeur — ajout de
-  [CONTRIBUTING.md](../CONTRIBUTING.md), de modèles d'issues
+  [CONTRIBUTING.md](../CONTRIBUTING.md), d'un [code de conduite](../CODE_OF_CONDUCT.md)
+  (Contributor Covenant v2.1), de modèles d'issues
   ([.github/ISSUE_TEMPLATE/](../.github/ISSUE_TEMPLATE)) et d'un modèle de PR
   ([.github/pull_request_template.md](../.github/pull_request_template.md)) — afin
   de faciliter de **vraies** contributions externes à l'avenir.
