@@ -1,0 +1,10 @@
+# Faux positifs gitleaks acceptés (empreintes figées par commit).
+#
+# Format : <commit>:<fichier>:<règle>:<ligne>
+#
+# tests/secrets.rs contient des jetons FACTICES servant de fixtures pour valider
+# la détection et la redaction de secrets (commande `mnemo secrets`). Ce ne sont
+# pas de vrais secrets. Le code courant porte aussi un marqueur en ligne
+# `gitleaks:allow` ; les empreintes ci-dessous neutralisent la détection dans les
+# commits historiques déjà fusionnés, où le marqueur n'était pas encore présent.
+be083f0646c50677bdf53041c0d532d49c210f54:tests/secrets.rs:curl-auth-header:91

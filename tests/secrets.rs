@@ -88,7 +88,9 @@ fn scan_json_valide_sans_secret() {
 
     seed(
         home,
-        "curl -H 'Authorization: Bearer tok3nABC' h",
+        // Jeton factice de test, pas un vrai secret ; le marqueur évite un faux
+        // positif du scanner gitleaks (règle curl-auth-header).
+        "curl -H 'Authorization: Bearer tok3nABC' h", // gitleaks:allow
         "2026-06-20 10:00:00",
     );
 
