@@ -5,10 +5,10 @@ This document helps maintainers prepare the
 mnemo. It gathers, in one place, the evidence that already exists in the
 repository so the form can be filled in quickly and honestly.
 
-> **This document does not claim that mnemo has already earned the badge.**
-> The badge is granted only after a maintainer completes the official
-> questionnaire on <https://www.bestpractices.dev> and the criteria are actually
-> met. No badge is added to the README until the status is genuinely granted.
+> **mnemo has earned the OpenSSF Best Practices badge at the _passing_ level.**
+> See the project page at <https://www.bestpractices.dev/projects/13366>. This
+> document records the evidence behind the answers given in the official
+> questionnaire; it does not assert any level beyond the one actually granted.
 
 ## Evidence available in mnemo
 
@@ -68,9 +68,10 @@ the form.
 - Some criteria (e.g. cryptographic signing of every individual artifact) are
   partially met; answer them accurately rather than optimistically.
 
-## Maintainer action required
+## Badge status
 
-The maintainer must manually complete the OpenSSF Best Practices Badge form at
-<https://www.bestpractices.dev> and only add a badge to the README **once the
-status is actually granted**. Until then, this file exists solely to prepare the
-application and must not be read as proof that the badge has been earned.
+The OpenSSF Best Practices Badge form has been completed and the project is
+listed at <https://www.bestpractices.dev/projects/13366> with the **passing**
+level granted. The badge is displayed in the README. This file remains the
+reference for the evidence behind each answer; any future change to the criteria
+must be reflected both here and in the official questionnaire.

@@ -28,7 +28,7 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 | Vulnerabilities | 8 | `RUSTSEC-2026-0002` (lru) et `RUSTSEC-2024-0436` (paste), transitifs via `ratatui` | Suivi, autorisés dans `deny.toml` | B |
 | Branch-Protection | 8 | Protection non maximale (non appliquée aux admins, 1 approbation requise) | Rulesets (non modifiés ici) | C |
 | Code-Review | 1 | 3/23 changesets approuvés | Nécessite revue + approbation systématiques | C |
-| CII-Best-Practices | 0 | Pas de badge OpenSSF Best Practices | Dossier de preuves préparé (badge à demander manuellement) | B (préparé) |
+| CII-Best-Practices | 0 | Badge OpenSSF Best Practices niveau Passing obtenu (projet 13366) | Le check passe au vert au prochain scan Scorecard | A (obtenu) |
 | Maintained | 0 | Projet créé il y a moins de 90 jours | S'améliore avec le temps | — |
 | Contributors | 0 | 0 organisation contributrice | Hors de portée d'une PR (pas de faux contributeurs) | — |
 | Packaging | -1 | Aucun workflow de packaging reconnu | Non concluant (publication binaire via GitHub App) | — |
@@ -70,23 +70,21 @@ Détails dans [docs/FUZZING.md](FUZZING.md).
 
 ## CII-Best-Practices and Contributors
 
-Ces deux checks valent actuellement **0**. Ils sont traités honnêtement, sans
-score gaming.
+Le badge **CII-Best-Practices** (niveau Passing) est désormais **obtenu** ; le
+check `Contributors` reste à **0**. Les deux sont traités honnêtement, sans score
+gaming.
 
-### CII-Best-Practices (0)
+### CII-Best-Practices (badge Passing obtenu)
 
-- **État** : aucun badge OpenSSF Best Practices n'est encore obtenu.
-- **Action saine** : un dossier de preuves est préparé dans
-  [docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Il recense les
-  éléments déjà présents (licence, politique de sécurité, CI, SAST, fuzzing,
-  audit des dépendances, intégrité des releases, etc.) pour faciliter le
-  remplissage du formulaire officiel.
-- **Limite** : le badge se demande **manuellement** sur
-  <https://www.bestpractices.dev> par un mainteneur. Le check ne passera au vert
-  qu'une fois le badge réellement accordé.
-- **Règle** : **ne pas** ajouter de badge « Best Practices » au README tant qu'il
-  n'est pas effectivement obtenu. Préparer le dossier ne signifie pas l'avoir
-  gagné.
+- **État** : le badge OpenSSF Best Practices **niveau Passing** est accordé —
+  projet <https://www.bestpractices.dev/projects/13366>. Le badge est affiché
+  dans le README.
+- **Preuves** : le dossier
+  [docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md) recense les éléments
+  justifiant chaque réponse (licence, politique de sécurité, CI, SAST, fuzzing,
+  audit des dépendances, intégrité des releases, etc.).
+- **Limite** : le check Scorecard lit le badge de façon asynchrone ; il passera de
+  **0** à **10** au prochain scan, sans action supplémentaire.
 
 ### Contributors (0)
 

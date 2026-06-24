@@ -99,7 +99,7 @@ shell. Voir [docs/FUZZING.md](FUZZING.md) pour le détail des cibles.
 ## Posture sécurité et OpenSSF Best Practices
 
 L'ensemble de ces workflows constitue une **posture de sécurité** documentée et
-sert de **preuves** pour préparer la demande de badge OpenSSF Best Practices :
+sert de **preuves** pour le badge OpenSSF Best Practices :
 
 - `ci.yml` — build, tests, format et lint sur chaque PR ;
 - `codeql.yml` — analyse statique (SAST) ;
@@ -109,6 +109,6 @@ sert de **preuves** pour préparer la demande de badge OpenSSF Best Practices :
 - `scorecard.yml` — suivi continu de la posture OpenSSF Scorecard.
 
 Le dossier de preuves est centralisé dans
-[docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Ces workflows
-**ne signifient pas** que le badge est acquis : il doit être demandé manuellement
-et n'est ajouté au README qu'une fois réellement accordé.
+[docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Le projet a obtenu le
+badge OpenSSF Best Practices **niveau Passing**
+(<https://www.bestpractices.dev/projects/13366>), affiché dans le README.
