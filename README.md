@@ -7,6 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#licence)
 [![Rust 1.96](https://img.shields.io/badge/rust-1.96.0-orange.svg)](rust-toolchain.toml)
 [![Supply chain](https://img.shields.io/badge/supply%20chain-SHA--256%20%2B%20cosign%20%2B%20SBOM-success.svg)](#sécurité-et-confidentialité)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Vesperis-group/mnemo/badge)](https://scorecard.dev/viewer/?uri=github.com/Vesperis-group/mnemo)
 
 https://github.com/user-attachments/assets/d7deb152-1e8d-48cd-8297-53a81798835d
 
