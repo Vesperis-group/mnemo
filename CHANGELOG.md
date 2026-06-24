@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.5.0](https://github.com/Vesperis-group/mnemo/compare/v1.4.1...v1.5.0) (2026-06-24)
+
+### Features
+
+* improve command search and retrieval ([#34](https://github.com/Vesperis-group/mnemo/issues/34)) ([b272494](https://github.com/Vesperis-group/mnemo/commit/b272494f2c9867ba4318f53aaf78d471d8235498))
+
 ## [1.4.1](https://github.com/Vesperis-group/mnemo/compare/v1.4.0...v1.4.1) (2026-06-24)
 
 ## [1.4.0](https://github.com/Vesperis-group/mnemo/compare/v1.3.0...v1.4.0) (2026-06-24)
