@@ -84,39 +84,41 @@ pub fn fetch_latest_release() -> Result<ReleaseInfo> {
 
 /// GET HTTP renvoyant le corps en texte.
 pub fn http_get_string(url: &str) -> Result<String> {
-    let resp = ureq::get(url)
-        .set("User-Agent", "mnemo-cli")
-        .set("Accept", "application/vnd.github+json")
+    let mut resp = ureq::get(url)
+        .header("User-Agent", "mnemo-cli")
+        .header("Accept", "application/vnd.github+json")
         .call()
-        .map_err(map_ureq_error)?;
-    resp.into_string()
+        .map_err(|err| map_ureq_error(url, err))?;
+    resp.body_mut()
+        .read_to_string()
         .context("corps de réponse HTTP illisible")
 }
 
 /// GET HTTP renvoyant le corps en octets (assets binaires).
 pub fn http_get_bytes(url: &str) -> Result<Vec<u8>> {
-    let resp = ureq::get(url)
-        .set("User-Agent", "mnemo-cli")
+    let mut resp = ureq::get(url)
+        .header("User-Agent", "mnemo-cli")
         .call()
-        .map_err(map_ureq_error)?;
+        .map_err(|err| map_ureq_error(url, err))?;
     let mut buf = Vec::new();
     use std::io::Read;
-    resp.into_reader()
+    // `as_reader()` lit le corps en flux, sans la limite de taille par défaut
+    // (10 Mio) des aides `read_to_vec()` : les assets de release peuvent être
+    // plus volumineux.
+    resp.body_mut()
+        .as_reader()
         .read_to_end(&mut buf)
         .context("téléchargement interrompu")?;
     Ok(buf)
 }
 
 /// Transforme une erreur `ureq` en message clair (statut HTTP ou transport).
-fn map_ureq_error(err: ureq::Error) -> anyhow::Error {
+fn map_ureq_error(url: &str, err: ureq::Error) -> anyhow::Error {
     match err {
-        ureq::Error::Status(code, resp) => {
-            let url = resp.get_url().to_string();
+        ureq::Error::StatusCode(code) => {
             anyhow::anyhow!("réponse HTTP {code} pour {url}")
         }
-        ureq::Error::Transport(t) => {
-            anyhow::anyhow!("erreur réseau : {t}")
-        }
+        other => anyhow::anyhow!("erreur réseau pour {url} : {other}"),
     }
 }
 
