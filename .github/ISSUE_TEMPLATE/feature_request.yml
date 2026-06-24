@@ -1,0 +1,37 @@
+name: Feature request
+description: Proposer une amélioration ou une nouvelle fonctionnalité
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci pour votre proposition. Pour un changement non trivial, cette issue
+        permet d'en discuter le périmètre avant toute Pull Request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Besoin ou problème
+      description: Quel problème cette fonctionnalité résout-elle ?
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Cas d'usage
+      description: Comment et quand cette fonctionnalité serait-elle utilisée ?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Piste de solution
+      description: Une approche envisagée, si vous en avez une (facultatif).
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives envisagées
+      description: Autres approches ou contournements possibles (facultatif).
+    validations:
+      required: false
