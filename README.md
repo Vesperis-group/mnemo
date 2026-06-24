@@ -1164,7 +1164,10 @@ mnemo est outillé comme un vrai projet DevSecOps :
   main), `codeql.yml` (SAST Rust), `lint.yml` (actionlint et ShellCheck),
   `release.yml` (release automatique au merge, permissions scopées),
   `release-smoke.yml` (smoke tests d'installation post-release, lecture seule,
-  ne publie rien — voir [docs/CI_CD.md](docs/CI_CD.md)).
+  ne publie rien — voir [docs/CI_CD.md](docs/CI_CD.md)),
+  `fuzz.yml` (baseline `cargo-fuzz` des fonctions pures sensibles — Markdown,
+  détection de secrets, parsing de durées/dates ; nightly requis uniquement pour
+  le fuzzing, voir [docs/FUZZING.md](docs/FUZZING.md)).
 - **Politique des dépendances** dans [deny.toml](deny.toml) : licences
   permissives autorisées uniquement, refus des vulnérabilités RustSec, contrôle
   des sources. `RUSTSEC-2024-0436` (`paste`) est accepté temporairement car

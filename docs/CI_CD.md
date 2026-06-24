@@ -15,6 +15,7 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 | `release.yml` | merge sur `main` | Release automatique signée (cosign, SBOM, provenance). |
 | `release-smoke.yml` | release publiée, manuel, hebdomadaire | Smoke tests d'installation post-release. |
 | `scorecard.yml` | push `main`, règle de branche, hebdomadaire, manuel | OpenSSF Scorecard (posture sécurité open source). |
+| `fuzz.yml` | pull_request, push `main`, hebdomadaire, manuel | Fuzzing `cargo-fuzz` (libFuzzer) des fonctions pures sensibles. |
 
 Le dépôt utilise aussi [`.github/dependabot.yml`](../.github/dependabot.yml)
 (écosystèmes `cargo`, `npm`, `github-actions`, cadence hebdomadaire) pour les
@@ -73,3 +74,24 @@ workflows, politiques de branche, détection de secrets, etc.).
 Le workflow **ne publie aucune release** et ne modifie pas le produit. Ses
 résultats aident à identifier les prochains durcissements de la chaîne
 d'approvisionnement.
+
+## `fuzz.yml`
+
+Ce workflow exécute une baseline de fuzzing avec
+[`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) (moteur libFuzzer) sur
+des fonctions **pures** réellement sensibles, sans base de données, réseau ni
+shell. Voir [docs/FUZZING.md](FUZZING.md) pour le détail des cibles.
+
+- **Déclencheurs** : `pull_request` et `push` sur `main` (limités par `paths` à
+  `src/**`, `fuzz/**`, `Cargo.toml`, `Cargo.lock` et le workflow lui-même),
+  `schedule` (dimanche 05:00 UTC, campagne plus longue) et `workflow_dispatch`.
+- **Permissions** : `contents: read` uniquement, aucun jeton en écriture.
+- **Toolchain** : Rust **nightly** et `cargo-fuzz` (version épinglée) sont
+  installés **uniquement dans ce workflow**. Le build, les tests et les releases
+  normales restent sur la toolchain stable figée par `rust-toolchain.toml` ;
+  nightly n'est jamais requis pour compiler ou utiliser `mnemo`.
+- **Cibles** : `mdfmt_escape` (échappement Markdown), `secret_detection`
+  (détection/redaction de secrets), `date_filter_parse` (parsing durées/dates).
+  Durée courte par cible sur PR (30 s), plus longue sur `schedule` (120 s).
+- **Corpus** : aucun corpus n'est téléchargé ni versionné ; les entrées
+  intéressantes restent locales et ignorées par git (`fuzz/.gitignore`).

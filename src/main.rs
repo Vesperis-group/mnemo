@@ -1,35 +1,13 @@
-mod archive;
-mod backup;
-mod cli;
-mod completions;
-mod config;
-mod confirm;
-mod db;
-mod doctor;
-mod export;
-mod filter;
-mod gitctx;
-mod importer;
-mod init;
-mod lifecycle;
-mod list;
-mod maintenance;
-mod mdfmt;
-mod migrations;
-mod project;
-mod prune;
-mod secrets;
-mod session;
-mod shell;
-mod show;
-mod stats;
-mod tui;
-mod version;
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::Write;
 use std::path::PathBuf;
+
+use mnemo::{
+    backup, cli, completions, config, db, doctor, export, filter, gitctx, importer, init,
+    lifecycle, list, maintenance, project, prune, secrets, session, shell, show, stats, tui,
+    version,
+};
 
 use cli::{Cli, Command};
 
