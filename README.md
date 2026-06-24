@@ -688,6 +688,31 @@ n'est jamais écrasé sans `--force`. Détails dans
 > puis rechargez le shell avec `source ~/.bashrc`. `mnemo doctor` signale aussi
 > ce cas et propose la commande.
 
+### Activité par projet
+
+`mnemo project` regroupe l'historique par **projet** (racine Git, `git_root`)
+pour naviguer par dépôt et produire des rapports d'activité réutilisables.
+
+```bash
+mnemo project list                                  # projets connus (commandes, sessions, dernière activité, branches)
+mnemo project list --json --limit 10                # même inventaire, en JSON
+mnemo project show mnemo                             # détail d'un projet (par nom ou racine)
+mnemo project show --current                         # projet du dossier courant
+mnemo project report --current --since 30d           # rapport Markdown des 30 derniers jours
+mnemo project report mnemo --format json --output rapport.json
+```
+
+`project show` affiche les métadonnées du projet (racine, remote, nombre de
+commandes et de sessions, période d'activité, branches), ses commandes récentes
+et ses derniers échecs. `project report` génère un document directement
+réutilisable (Markdown par défaut ou JSON) : agrégats de la période, détail
+chronologique et liste des échecs, filtrable par `--since`/`--until`. Comme le
+reste de mnemo, ces commandes sont en **lecture seule** : aucune commande de
+l'historique n'est jamais exécutée, et les commandes déjà redactées le restent.
+Un fichier de sortie existant n'est jamais écrasé sans `--force`. Détails dans
+[docs/PROJECTS.md](docs/PROJECTS.md).
+
+
 ### Nettoyage des secrets
 
 À l'enregistrement, `mnemo` ignore déjà les commandes sensibles (voir
@@ -1050,7 +1075,9 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo shell upgrade` | Met à niveau le bloc d'intégration Bash existant vers la version courante (capture de `MNEMO_SESSION_ID` pour `mnemo session`) : sauvegarde automatique, bloc remplacé proprement, reste du `~/.bashrc` intact. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
 | `mnemo stats [--project <nom>] [--branch <branche>] [--since <durée\|date>] [--json]` | Statistiques d'usage enrichies (totaux, taux d'échec, top commandes / dossiers / projets / shells, activité quotidienne), filtrables (dont `--project current`) et exportables en JSON. |
-| `mnemo project <current\|list>` | Affiche le projet courant (racine Git, marqueur de projet ou dossier) ou la liste des projets connus. |
+| `mnemo project <current\|list>` | Affiche le projet courant (racine Git, marqueur de projet ou dossier) ou la liste des projets connus (`list [--limit N] [--json]` : commandes, sessions, dernière activité, branches). |
+| `mnemo project show <projet\|--current> [--limit N] [--json]` | Détaille un projet : métadonnées (racine, remote, commandes, sessions, période, branches), commandes récentes et derniers échecs. Lecture seule : n'exécute **jamais** les commandes. |
+| `mnemo project report <projet\|--current> [--since <durée\|date>] [--until <date>] [--format markdown\|json] [--output <fichier>] [--force] [--limit N]` | Génère un rapport d'activité réutilisable (Markdown par défaut ou JSON) : agrégats de la période, détail chronologique et échecs ; stdout par défaut, jamais d'écrasement sans `--force`. |
 | `mnemo maintenance <status\|run>` | État du nettoyage automatique ; `run --dry-run` simule, `run --yes` applique (désactivé par défaut, sauvegarde avant purge). |
 | `mnemo session list [--limit N]` | Liste les sessions de travail (groupées par `session_id`), de la plus récente à la plus ancienne. |
 | `mnemo session show <session_id> [--limit N]` | Affiche les commandes d'une session dans l'ordre chronologique. |

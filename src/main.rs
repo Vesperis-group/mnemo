@@ -14,6 +14,7 @@ mod init;
 mod lifecycle;
 mod list;
 mod maintenance;
+mod mdfmt;
 mod migrations;
 mod project;
 mod prune;
@@ -180,7 +181,23 @@ fn run() -> Result<()> {
         } => lifecycle::uninstall::run(dry_run, yes, purge),
         Command::Project { action } => match action {
             cli::ProjectCommand::Current => project::run_current(),
-            cli::ProjectCommand::List => project::run_list(),
+            cli::ProjectCommand::List { limit, json } => project::run_list(limit, json),
+            cli::ProjectCommand::Show {
+                project,
+                current,
+                limit,
+                json,
+            } => project::run_show(project, current, limit, json),
+            cli::ProjectCommand::Report {
+                project,
+                current,
+                since,
+                until,
+                format,
+                output,
+                force,
+                limit,
+            } => project::run_report(project, current, since, until, format, output, force, limit),
         },
         Command::Maintenance { action } => match action {
             cli::MaintenanceCommand::Status => maintenance::run_status(),

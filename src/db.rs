@@ -451,6 +451,172 @@ pub fn latest_session_id(conn: &Connection) -> Result<Option<String>> {
     }
 }
 
+/// Résumé agrégé de l'activité d'un projet (regroupement par `git_root`).
+#[derive(Debug, Clone)]
+pub struct ProjectSummary {
+    /// Racine Git du projet.
+    pub root: String,
+    /// Nombre total de commandes enregistrées.
+    pub command_count: i64,
+    /// Nombre de sessions distinctes (commandes portant un `session_id`).
+    pub session_count: i64,
+    /// Horodatage de la première commande connue.
+    pub first_activity: String,
+    /// Horodatage de la dernière commande connue.
+    pub last_activity: String,
+    /// Branches Git rencontrées, triées et dédupliquées.
+    pub branches: Vec<String>,
+    /// Un remote Git connu du projet, si disponible.
+    pub remote: Option<String>,
+}
+
+/// Découpe la concaténation `GROUP_CONCAT(DISTINCT git_branch)` en liste de
+/// branches triée, sans doublon ni valeur vide.
+fn split_branches(raw: Option<String>) -> Vec<String> {
+    let mut branches: Vec<String> = raw
+        .unwrap_or_default()
+        .split(',')
+        .map(|b| b.trim().to_string())
+        .filter(|b| !b.is_empty())
+        .collect();
+    branches.sort();
+    branches.dedup();
+    branches
+}
+
+/// Liste les projets connus de l'historique, du plus récemment actif au plus
+/// ancien. Seuls les `git_root` non nuls sont remontés. `limit` borne le nombre
+/// de projets (`None` = tous).
+pub fn project_summaries(conn: &Connection, limit: Option<usize>) -> Result<Vec<ProjectSummary>> {
+    let limit_sql = match limit {
+        Some(n) => format!("LIMIT {}", n as i64),
+        None => String::new(),
+    };
+    let sql = format!(
+        "SELECT git_root,
+                COUNT(*) AS n,
+                COUNT(DISTINCT CASE
+                    WHEN session_id IS NOT NULL AND TRIM(session_id) <> ''
+                    THEN session_id END) AS sessions,
+                MIN(created_at) AS first_at,
+                MAX(created_at) AS last_at,
+                GROUP_CONCAT(DISTINCT git_branch) AS branches,
+                MAX(git_remote) AS remote
+         FROM commands
+         WHERE git_root IS NOT NULL AND git_root <> ''
+         GROUP BY git_root
+         ORDER BY last_at DESC, git_root ASC
+         {limit_sql}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map([], project_summary_row)?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Résumé d'un projet identifié par sa racine Git exacte, ou `None` si la racine
+/// est absente de l'historique.
+pub fn project_summary(conn: &Connection, root: &str) -> Result<Option<ProjectSummary>> {
+    let mut stmt = conn.prepare(
+        "SELECT git_root,
+                COUNT(*) AS n,
+                COUNT(DISTINCT CASE
+                    WHEN session_id IS NOT NULL AND TRIM(session_id) <> ''
+                    THEN session_id END) AS sessions,
+                MIN(created_at) AS first_at,
+                MAX(created_at) AS last_at,
+                GROUP_CONCAT(DISTINCT git_branch) AS branches,
+                MAX(git_remote) AS remote
+         FROM commands
+         WHERE git_root = ?1
+         GROUP BY git_root",
+    )?;
+    let mut rows = stmt.query_map(rusqlite::params![root], project_summary_row)?;
+    match rows.next() {
+        Some(r) => Ok(Some(r?)),
+        None => Ok(None),
+    }
+}
+
+/// Convertit une ligne agrégée en [`ProjectSummary`].
+fn project_summary_row(row: &rusqlite::Row) -> rusqlite::Result<ProjectSummary> {
+    Ok(ProjectSummary {
+        root: row.get(0)?,
+        command_count: row.get(1)?,
+        session_count: row.get(2)?,
+        first_activity: row.get(3)?,
+        last_activity: row.get(4)?,
+        branches: split_branches(row.get(5)?),
+        remote: row.get(6)?,
+    })
+}
+
+/// Liste les racines Git connues correspondant à `needle` : correspondance
+/// exacte sur `git_root`, ou suffixe `%/needle` (nom court du projet). Sert à
+/// résoudre l'argument de `mnemo project show|report`.
+pub fn match_project_roots(conn: &Connection, needle: &str) -> Result<Vec<String>> {
+    let suffix = format!("%/{needle}");
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT git_root
+         FROM commands
+         WHERE git_root IS NOT NULL AND git_root <> ''
+           AND (git_root = ?1 OR git_root LIKE ?2)
+         ORDER BY git_root ASC",
+    )?;
+    let rows = stmt.query_map(rusqlite::params![needle, suffix], |row| {
+        row.get::<_, String>(0)
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Charge les commandes d'un projet (racine Git exacte), de la plus récente à la
+/// plus ancienne, en respectant un éventuel intervalle temporel et un filtre
+/// d'échecs. `limit` borne le nombre de résultats (`None` = tous).
+///
+/// En lecture seule : aucune commande n'est exécutée, le contenu (y compris les
+/// commandes déjà redactées) est restitué tel quel.
+pub fn project_records(
+    conn: &Connection,
+    root: &str,
+    since: Option<&str>,
+    before: Option<&str>,
+    failed_only: bool,
+    limit: Option<usize>,
+) -> Result<Vec<CommandRecord>> {
+    let limit_sql = match limit {
+        Some(n) => format!("LIMIT {}", n as i64),
+        None => String::new(),
+    };
+    let sql = format!(
+        "SELECT id, command, cwd, shell, hostname, exit_code, created_at,
+                git_root, git_branch, git_remote, session_id
+         FROM commands
+         WHERE git_root = ?1
+           AND (?2 IS NULL OR created_at >= ?2)
+           AND (?3 IS NULL OR created_at < ?3)
+           AND (?4 = 0 OR (exit_code IS NOT NULL AND exit_code <> 0))
+         ORDER BY created_at DESC, id DESC
+         {limit_sql}"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(
+        rusqlite::params![root, since, before, failed_only as i64],
+        row_to_record,
+    )?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
 /// Nombre total de commandes stockées.
 pub fn count(conn: &Connection) -> Result<i64> {
     let n = conn.query_row("SELECT COUNT(*) FROM commands", [], |row| row.get(0))?;
