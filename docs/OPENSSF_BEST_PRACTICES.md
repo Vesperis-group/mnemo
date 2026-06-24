@@ -21,6 +21,7 @@ repository so the form can be filled in quickly and honestly.
 | Security policy | Private vulnerability reporting process | [SECURITY.md](../SECURITY.md) |
 | Threat model | Documented security assumptions | [docs/THREAT_MODEL.md](THREAT_MODEL.md) |
 | Contribution process | Contributor guide and expectations | [CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Code of conduct | Contributor Covenant v2.1 with a private enforcement channel | [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
 | Issue & PR templates | Structured bug/feature/PR intake | [.github/ISSUE_TEMPLATE/](../.github/ISSUE_TEMPLATE), [.github/pull_request_template.md](../.github/pull_request_template.md) |
 | CI tests | Rust unit/integration tests run on PR and `main` | [.github/workflows/ci.yml](../.github/workflows/ci.yml) |
 | Static analysis (SAST) | CodeQL on every commit | [.github/workflows/codeql.yml](../.github/workflows/codeql.yml) |
@@ -43,7 +44,8 @@ evidence; the maintainer remains responsible for the authoritative answers in
 the form.
 
 - **Basics** — public repository, MIT license, README describing the project,
-  and a documented contribution process (`CONTRIBUTING.md`).
+  a documented contribution process (`CONTRIBUTING.md`) and a code of conduct
+  (`CODE_OF_CONDUCT.md`, Contributor Covenant v2.1).
 - **Change control** — all changes go through pull requests on dedicated
   branches; direct pushes to `main` are forbidden by convention and enforced via
   rulesets (see [docs/REPOSITORY_RULES.md](REPOSITORY_RULES.md)).

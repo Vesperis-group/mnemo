@@ -7,6 +7,8 @@ cibles `make`, voir la section **Contribution** du [README](README.md#contributi
 
 ## Avant de commencer
 
+- En participant à ce projet, vous acceptez de respecter notre
+  [Code de conduite](CODE_OF_CONDUCT.md).
 - Le développement direct sur `main` est **interdit par convention** : toute
   modification passe par une **branche dédiée** puis une **Pull Request**.
 - Pour un changement non trivial, ouvrez d'abord une **issue** afin d'en discuter
