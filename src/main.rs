@@ -28,6 +28,7 @@ mod version;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use std::io::Write;
 use std::path::PathBuf;
 
 use cli::{Cli, Command};
@@ -158,7 +159,7 @@ fn run() -> Result<()> {
             yes,
         } => prune::prune_run(older_than, project, branch, dry_run, yes),
         Command::Version => {
-            version::run();
+            version::run()?;
             Ok(())
         }
         Command::Update {
@@ -347,16 +348,21 @@ fn cmd_search(args: cli::SearchArgs) -> Result<()> {
     // impliquent le mode non interactif (inutile d'ouvrir la TUI pour ensuite
     // émettre du JSON ou une liste d'IDs).
     if args.print || args.json || args.id_only {
+        // Sortie destinée aux scripts : écriture via un stdout verrouillé pour
+        // qu'un `BrokenPipe` (sortie pipée vers `head`…) remonte comme une
+        // erreur propre interceptée dans `main` plutôt que de paniquer.
+        let stdout = std::io::stdout();
+        let mut out = stdout.lock();
         if args.id_only {
             for rec in tui::search_records(&records, &query, args.limit) {
-                println!("{}", rec.id);
+                writeln!(out, "{}", rec.id)?;
             }
         } else if args.json {
             let matching = tui::search_records(&records, &query, args.limit);
-            println!("{}", export::records_to_json(&matching)?);
+            writeln!(out, "{}", export::records_to_json(&matching)?)?;
         } else {
             for cmd in tui::search_print(&records, &query, args.limit) {
-                println!("{cmd}");
+                writeln!(out, "{cmd}")?;
             }
         }
         return Ok(());
