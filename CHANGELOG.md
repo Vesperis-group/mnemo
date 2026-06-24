@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.6.0](https://github.com/Vesperis-group/mnemo/compare/v1.5.0...v1.6.0) (2026-06-24)
+
+### Features
+
+* add project activity reports ([#35](https://github.com/Vesperis-group/mnemo/issues/35)) ([13df6e4](https://github.com/Vesperis-group/mnemo/commit/13df6e4f59bf80649fa52c9a67e64c1f4de5e4a4))
+
 ## [1.5.0](https://github.com/Vesperis-group/mnemo/compare/v1.4.1...v1.5.0) (2026-06-24)
 
 ### Features
