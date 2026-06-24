@@ -16,6 +16,12 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 | `release-smoke.yml` | release publiée, manuel, hebdomadaire | Smoke tests d'installation post-release. |
 | `scorecard.yml` | push `main`, règle de branche, hebdomadaire, manuel | OpenSSF Scorecard (posture sécurité open source). |
 
+Le dépôt utilise aussi [`.github/dependabot.yml`](../.github/dependabot.yml)
+(écosystèmes `cargo`, `npm`, `github-actions`, cadence hebdomadaire) pour les
+mises à jour de dépendances. Dependabot conserve l'épinglage des actions par SHA
+et n'active aucun auto-merge. Voir [docs/SCORECARD.md](SCORECARD.md) pour la
+posture OpenSSF Scorecard détaillée.
+
 ## `release-smoke.yml`
 
 Ce workflow vérifie qu'une release **publiée** est réellement installable et

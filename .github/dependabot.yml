@@ -1,0 +1,59 @@
+version: 2
+
+# Dependabot : detection automatique des mises a jour de dependances.
+# Cible le check OpenSSF Scorecard "Dependency-Update-Tool".
+#
+# Important (politique supply chain du depot) :
+# - Les actions GitHub sont epinglees par SHA de commit complet. Dependabot
+#   conserve cet epinglage : il met a jour le SHA ET le commentaire `# vX.Y.Z`,
+#   sans repasser a un tag flottant.
+# - Aucun auto-merge : chaque PR Dependabot reste soumise a la revue et aux
+#   controles CI/audit habituels avant fusion.
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions-all:
+        update-types:
+          - "minor"
+          - "patch"

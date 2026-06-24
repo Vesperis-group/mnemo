@@ -17,11 +17,13 @@ on:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
-# Permissions minimales : lecture du dépôt + écriture des alertes de sécurité
-# (publication des résultats CodeQL dans l'onglet Security).
+# Permissions minimales au niveau workflow : lecture seule du dépôt.
+# L'écriture des alertes de sécurité (`security-events: write`, publication des
+# résultats CodeQL dans l'onglet Security) est accordée uniquement au job
+# `analyze` qui en a besoin, conformément au principe de moindre privilège
+# (recommandation OpenSSF Scorecard, check « Token-Permissions »).
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: codeql-${{ github.ref }}
