@@ -433,7 +433,56 @@ pub enum ProjectCommand {
     /// Affiche le projet détecté pour le répertoire courant.
     Current,
     /// Liste les projets connus de l'historique.
-    List,
+    List {
+        /// Nombre maximal de projets affichés.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+        /// Sortie JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Affiche le détail d'un projet : activité, branches, derniers échecs.
+    Show {
+        /// Racine ou nom court du projet (incompatible avec `--current`).
+        #[arg(value_name = "PROJET", conflicts_with = "current")]
+        project: Option<String>,
+        /// Cible le projet du répertoire courant.
+        #[arg(long)]
+        current: bool,
+        /// Nombre maximal de commandes récentes affichées.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+        /// Sortie JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Génère un rapport d'activité réutilisable (Markdown par défaut, ou JSON).
+    Report {
+        /// Racine ou nom court du projet (incompatible avec `--current`).
+        #[arg(value_name = "PROJET", conflicts_with = "current")]
+        project: Option<String>,
+        /// Cible le projet du répertoire courant.
+        #[arg(long)]
+        current: bool,
+        /// Borne inférieure (`24h`, `7d`, `2w`, `3m`, `1y` ou `AAAA-MM-JJ`).
+        #[arg(long, value_name = "DURÉE|DATE")]
+        since: Option<String>,
+        /// Borne supérieure (`AAAA-MM-JJ` exclue, ou durée).
+        #[arg(long, value_name = "DURÉE|DATE")]
+        until: Option<String>,
+        /// Format de sortie (`markdown` par défaut).
+        #[arg(long, value_enum, default_value = "markdown")]
+        format: SessionFormat,
+        /// Fichier de sortie (défaut : stdout).
+        #[arg(long, value_name = "FICHIER")]
+        output: Option<PathBuf>,
+        /// Autorise l'écrasement d'un fichier de sortie existant.
+        #[arg(long)]
+        force: bool,
+        /// Nombre maximal de commandes détaillées dans le rapport.
+        #[arg(long, value_name = "N")]
+        limit: Option<usize>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

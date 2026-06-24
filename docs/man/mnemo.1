@@ -69,6 +69,25 @@ sauf si
 est fourni ; n'écrase jamais un fichier existant sans
 .BR --force .
 .TP
+.B project list [--limit \fIN\fR] [--json]
+Liste les projets connus de l'historique (regroupés par
+.IR git_root ),
+avec nombre de commandes, de sessions, dernière activité et branches.
+.TP
+.B project show \fIPROJET\fR|--current [--limit \fIN\fR] [--json]
+Détaille un projet (par nom court, racine complète ou
+.BR --current ) :
+métadonnées, commandes récentes et derniers échecs. Lecture seule : mnemo
+n'exécute jamais les commandes.
+.TP
+.B project report \fIPROJET\fR|--current [--since \fIDURÉE|DATE\fR] [--until \fIDATE\fR] [--format markdown|json] [--output \fIFICHIER\fR] [--force] [--limit \fIN\fR]
+Génère un rapport d'activité réutilisable (Markdown par défaut ou JSON) :
+agrégats de la période, détail chronologique et échecs. Écrit sur la sortie
+standard sauf si
+.B --output
+est fourni ; n'écrase jamais un fichier existant sans
+.BR --force .
+.TP
 .B search [\fIREQUÊTE\fR] [--print] [--json] [--id-only] [--limit \fIN\fR] [--failed] [--exit-code \fICODE\fR] [--project \fINOM\fR] [--branch \fIBRANCHE\fR] [--cwd \fICHEMIN\fR] [--shell \fISHELL\fR] [--since \fIDURÉE|DATE\fR] [--before \fIDATE\fR]
 Recherche dans l'historique enregistré. Sans
 .BR --print ,
@@ -155,4 +174,4 @@ Afficher le détail puis imprimer la commande 128 :
 .BR bash (1),
 .BR sqlite3 (1)
 .PP
-Documentation : docs/UX_ONBOARDING.md, docs/SESSIONS.md
+Documentation : docs/UX_ONBOARDING.md, docs/SESSIONS.md, docs/PROJECTS.md
