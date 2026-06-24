@@ -1,6 +1,6 @@
 [package]
 name = "mnemo"
-version = "1.6.11"
+version = "1.6.12"
 edition = "2021"
 description = "Local-first shell history assistant with search, project context, TUI, backups, maintenance and verifiable releases"
 license = "MIT"
