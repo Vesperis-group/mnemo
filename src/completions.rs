@@ -8,7 +8,7 @@
 use anyhow::Result;
 use clap::CommandFactory;
 use clap_complete::generate;
-use std::io;
+use std::io::{self, Write};
 
 use crate::cli::{Cli, CompletionShell};
 
@@ -16,6 +16,17 @@ use crate::cli::{Cli, CompletionShell};
 pub fn run(shell: CompletionShell) -> Result<()> {
     let mut cmd = Cli::command();
     let bin_name = cmd.get_name().to_string();
-    generate(shell.generator(), &mut cmd, bin_name, &mut io::stdout());
+
+    // `generate` écrit dans un tampon mémoire plutôt que directement sur stdout :
+    // l'écriture vers stdout est ensuite faite d'un bloc via `write_all`, qui
+    // remonte un `BrokenPipe` (sortie pipée vers `head`…) comme une erreur propre
+    // interceptée dans `main`, au lieu de faire paniquer `generate`.
+    let mut buffer: Vec<u8> = Vec::new();
+    generate(shell.generator(), &mut cmd, bin_name, &mut buffer);
+
+    let stdout = io::stdout();
+    let mut out = stdout.lock();
+    out.write_all(&buffer)?;
+    out.flush()?;
     Ok(())
 }
