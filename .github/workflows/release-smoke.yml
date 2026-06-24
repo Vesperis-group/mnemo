@@ -119,9 +119,10 @@ jobs:
 
           # Version installee == tag teste.
           mnemo version
-          installed="$(mnemo version | head -n1)"
+          mnemo version > "${HOME}/smoke-version.txt"
+          installed="$(head -n1 "${HOME}/smoke-version.txt")"
           expected="${MNEMO_VERSION#v}"
-          echo "${installed}" | grep -Fq "${expected}" || {
+          grep -Fq "${expected}" "${HOME}/smoke-version.txt" || {
             echo "Version installee inattendue : '${installed}' (attendu : ${expected})" >&2
             exit 1
           }
@@ -143,7 +144,8 @@ jobs:
 
           # Cycle de vie reel : ajout, recherche, inspection.
           mnemo add --cmd "echo hello" --exit-code 0
-          id="$(mnemo search hello --id-only | head -n1)"
+          mnemo search hello --id-only > "${HOME}/smoke-ids.txt"
+          id="$(head -n1 "${HOME}/smoke-ids.txt")"
           test -n "${id}"
           mnemo show "${id}"
           # `mnemo print` est consulte mais sa sortie n'est JAMAIS executee.
@@ -214,5 +216,6 @@ jobs:
             test -n "${bin}"
             chmod +x "${bin}"
             "${bin}" version
-            "${bin}" version | head -n1 | grep -Fq "${MNEMO_VERSION#v}"
+            "${bin}" version > "${dir}/version.txt"
+            grep -Fq "${MNEMO_VERSION#v}" "${dir}/version.txt"
           done
