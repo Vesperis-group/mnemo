@@ -14,6 +14,7 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 | `lint.yml` | push, pull_request | `actionlint` et `ShellCheck`. |
 | `release.yml` | merge sur `main` | Release automatique signée (cosign, SBOM, provenance). |
 | `release-smoke.yml` | release publiée, manuel, hebdomadaire | Smoke tests d'installation post-release. |
+| `scorecard.yml` | push `main`, règle de branche, hebdomadaire, manuel | OpenSSF Scorecard (posture sécurité open source). |
 
 ## `release-smoke.yml`
 
@@ -46,3 +47,23 @@ utilisable par un utilisateur final, en empruntant le chemin officiel
 Ce workflow reste un **smoke test d'installation** : il ne duplique pas la
 vérification complète de signature Sigstore et de provenance déjà effectuée
 dans `release.yml`.
+
+## `scorecard.yml`
+
+Ce workflow exécute [OpenSSF Scorecard](https://scorecard.dev) pour mesurer la
+posture de sécurité open source du dépôt (épinglage des actions, permissions des
+workflows, politiques de branche, détection de secrets, etc.).
+
+- **Déclencheurs** : `push` sur `main`, `branch_protection_rule`, `schedule`
+  (lundi 07h00 UTC) et `workflow_dispatch`.
+- **Permissions** : `contents: read` au niveau workflow. Le job ajoute seulement
+  `id-token: write` (requis par `publish_results: true`) et
+  `security-events: write` (remontée SARIF dans Code Scanning). Aucun jeton
+  d'écriture sur le contenu, les actions, les packages, les issues ou les PR.
+- **Publication** : `publish_results: true` alimente le badge public Scorecard
+  (visible dans l'en-tête du README). Le SARIF est aussi remonté dans l'onglet
+  Security (Code Scanning) et archivé en artefact.
+
+Le workflow **ne publie aucune release** et ne modifie pas le produit. Ses
+résultats aident à identifier les prochains durcissements de la chaîne
+d'approvisionnement.
