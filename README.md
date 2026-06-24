@@ -8,6 +8,7 @@
 [![Rust 1.96](https://img.shields.io/badge/rust-1.96.0-orange.svg)](rust-toolchain.toml)
 [![Supply chain](https://img.shields.io/badge/supply%20chain-SHA--256%20%2B%20cosign%20%2B%20SBOM-success.svg)](#sécurité-et-confidentialité)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Vesperis-group/mnemo/badge)](https://scorecard.dev/viewer/?uri=github.com/Vesperis-group/mnemo)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13366/badge)](https://www.bestpractices.dev/projects/13366)
 
 https://github.com/user-attachments/assets/d7deb152-1e8d-48cd-8297-53a81798835d
 
@@ -1662,9 +1663,9 @@ toute modification passe par une **branche dédiée** puis une **Pull Request**,
 push direct sur `main` étant interdit par convention.
 
 Le guide complet du contributeur est dans [CONTRIBUTING.md](CONTRIBUTING.md). Le
-projet maintient par ailleurs un dossier de preuves
-[docs/OPENSSF_BEST_PRACTICES.md](docs/OPENSSF_BEST_PRACTICES.md) pour préparer une
-future demande de badge OpenSSF Best Practices (badge non encore obtenu).
+projet a obtenu le badge **OpenSSF Best Practices (niveau Passing)** ; le dossier
+de preuves est dans
+[docs/OPENSSF_BEST_PRACTICES.md](docs/OPENSSF_BEST_PRACTICES.md).
 
 ### Mettre en place l'environnement
 
