@@ -19,7 +19,7 @@ clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 rusqlite = { version = "0.32", features = ["bundled"] }
 ratatui = "0.29"
-crossterm = "0.28"
+crossterm = "0.29"
 nucleo-matcher = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
