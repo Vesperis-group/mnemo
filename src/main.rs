@@ -20,6 +20,7 @@ mod prune;
 mod secrets;
 mod session;
 mod shell;
+mod show;
 mod stats;
 mod tui;
 mod version;
@@ -84,6 +85,7 @@ fn run() -> Result<()> {
             cwd,
             shell,
             json,
+            id_only,
         } => cmd_search(cli::SearchArgs {
             query: query.or(query_opt),
             print,
@@ -97,6 +99,7 @@ fn run() -> Result<()> {
             cwd,
             shell,
             json,
+            id_only,
         }),
         Command::Tui {
             query,
@@ -143,6 +146,8 @@ fn run() -> Result<()> {
             branch,
             json,
         } => list::run(limit, project, branch, json),
+        Command::Show { id } => show::run_show(id),
+        Command::Print { id } => show::run_print(id),
         Command::Delete { id, dry_run, yes } => prune::delete_run(id, dry_run, yes),
         Command::Prune {
             older_than,
@@ -321,9 +326,15 @@ fn cmd_search(args: cli::SearchArgs) -> Result<()> {
 
     let query = args.query.unwrap_or_default();
 
-    // Mode non interactif : affiche les résultats sur stdout (scripts/CI).
-    if args.print {
-        if args.json {
+    // `--json` et `--id-only` produisent une sortie destinée aux scripts : ils
+    // impliquent le mode non interactif (inutile d'ouvrir la TUI pour ensuite
+    // émettre du JSON ou une liste d'IDs).
+    if args.print || args.json || args.id_only {
+        if args.id_only {
+            for rec in tui::search_records(&records, &query, args.limit) {
+                println!("{}", rec.id);
+            }
+        } else if args.json {
             let matching = tui::search_records(&records, &query, args.limit);
             println!("{}", export::records_to_json(&matching)?);
         } else {

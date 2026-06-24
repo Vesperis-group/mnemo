@@ -69,8 +69,41 @@ sauf si
 est fourni ; n'écrase jamais un fichier existant sans
 .BR --force .
 .TP
-.B search
-Recherche dans l'historique enregistré.
+.B search [\fIREQUÊTE\fR] [--print] [--json] [--id-only] [--limit \fIN\fR] [--failed] [--exit-code \fICODE\fR] [--project \fINOM\fR] [--branch \fIBRANCHE\fR] [--cwd \fICHEMIN\fR] [--shell \fISHELL\fR] [--since \fIDURÉE|DATE\fR] [--before \fIDATE\fR]
+Recherche dans l'historique enregistré. Sans
+.BR --print ,
+ouvre la TUI interactive avec les filtres pré-remplis ;
+.BR --print " (ou " --json / --id-only )
+produit une sortie non interactive. Filtres combinables (ET logique) :
+.B --failed
+(échecs uniquement),
+.B --project / --branch / --cwd / --shell
+(contexte),
+.B --since
+accepte une durée
+.RB ( 24h ", " 7d ", " 2w ", " 3m ", " 1y )
+ou une date
+.IR AAAA-MM-JJ ,
+.B --before
+.RB ( "alias " --until )
+une date.
+.B --json
+émet un JSON stable ;
+.B --id-only
+n'affiche que les identifiants (un par ligne), pratique à chaîner avec
+.BR "mnemo show" / "mnemo print" .
+.TP
+.B show \fIID\fR
+Affiche le détail complet d'une commande (date, dossier, contexte Git, session,
+code retour, commande). mnemo n'exécute jamais la commande : cette sous-commande
+lit seulement la base. Une commande déjà redactée s'affiche sous sa forme
+redactée stockée.
+.TP
+.B print \fIID\fR
+Imprime uniquement la commande brute sur la sortie standard, sans label ni
+couleur, suivie d'un saut de ligne. mnemo ne l'exécute pas : l'utilisateur reste
+responsable de l'usage de la sortie. ID inexistant : erreur sur stderr, code de
+sortie non nul.
 .TP
 .B secrets scan [--limit \fIN\fR] [--json]
 Repère dans l'historique stocké les commandes potentiellement sensibles. Elles
@@ -112,6 +145,12 @@ Activer la complétion Bash pour la session courante :
 .TP
 Installer la complétion Zsh :
 .B mnemo completions zsh > ~/.zsh/completions/_mnemo
+.TP
+Lister les échecs récents d'un projet, puis récupérer une commande :
+.B mnemo search cargo --failed --project mnemo --id-only
+.TP
+Afficher le détail puis imprimer la commande 128 :
+.B mnemo show 128 ; mnemo print 128
 .SH SEE ALSO
 .BR bash (1),
 .BR sqlite3 (1)

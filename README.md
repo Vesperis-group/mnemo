@@ -37,6 +37,7 @@ qui reste entièrement sur votre machine.
 - 🚀 Onboarding guidé `mnemo init --wizard` et complétions shell `bash`, `zsh`, `fish`.
 - 🗂️ Sessions de travail : `mnemo session list/show/export` (Markdown ou JSON).
 - 🛡️ Nettoyage des secrets de l'historique : `mnemo secrets scan/redact` (dry-run par défaut).
+- 🎯 Inspection et récupération sûres : `mnemo show <id>`, `mnemo print <id>` (jamais d'exécution automatique).
 
 ---
 
@@ -379,28 +380,54 @@ finement l'historique, sans TUI (idéal pour les scripts et la CI) :
 ```bash
 mnemo search --print --failed                 # uniquement les commandes en échec
 mnemo search --print --exit-code 127          # code de sortie exact
+mnemo search docker --print --since 24h        # dernières 24 heures (durée)
 mnemo search docker --print --since 7d        # 7 derniers jours (durée)
 mnemo search --print --since 2026-01-01       # depuis une date (AAAA-MM-JJ)
-mnemo search --print --before 2026-06-01      # avant une date
+mnemo search --print --before 2026-06-01      # avant une date (alias : --until)
 mnemo search --print --cwd /home/killian/mnemo
 mnemo search --print --shell bash
 mnemo search --print --project current        # projet du dossier courant
 mnemo search cargo --print --branch main --limit 50
-mnemo search --print --json                   # sortie JSON stable
+mnemo search --json                           # sortie JSON stable (mode non interactif implicite)
+mnemo search cargo --id-only                  # uniquement les IDs, un par ligne
 ```
 
-- `--since` accepte une **durée** (`7d`, `2w`, `3m`, `1y`) ou une **date**
-  `AAAA-MM-JJ` ; `--before` attend une date. Une valeur de date **invalide**
-  n'interrompt pas la commande : le filtre est simplement ignoré, avec un
-  avertissement.
+- `--since` accepte une **durée** (`24h`, `7d`, `2w`, `3m`, `1y`) ou une **date**
+  `AAAA-MM-JJ` ; `--before` (alias `--until`) attend une date. Une valeur de date
+  **invalide** n'interrompt pas la commande : le filtre est simplement ignoré,
+  avec un avertissement.
 - `--failed` et `--exit-code` sont mutuellement exclusifs.
 - `--project current` détecte automatiquement le projet du répertoire courant
   (racine Git, marqueur de projet, ou nom du dossier).
-- `--json` (avec `--print`) produit un tableau d'objets au **format stable**
-  (mêmes champs que `mnemo export --format json`).
+- `--json` produit un tableau d'objets au **format stable** (mêmes champs que
+  `mnemo export --format json`) ; `--id-only` n'affiche que les identifiants.
+  Ces deux options activent automatiquement le mode non interactif (inutile de
+  préciser `--print`) et sont mutuellement exclusives.
 
 Tous ces filtres sont également disponibles dans la **TUI** via les raccourcis
 (`f` statut, `p`/`b` projet/branche courant, `Ctrl+P/B/D` depuis la sélection).
+
+### Inspecter et récupérer une commande
+
+`mnemo show` et `mnemo print` ciblent une commande par son ID (obtenu via
+`mnemo list`, `mnemo search --id-only` ou la TUI). **mnemo n'exécute jamais une
+commande de l'historique** : ces sous-commandes se contentent de lire la base.
+
+```bash
+mnemo show 128     # détail complet : date, dossier, contexte Git, session, code retour
+mnemo print 128    # uniquement la commande brute sur stdout (copie/redirection)
+```
+
+- `mnemo show` omet les champs non renseignés plutôt que d'inventer une valeur.
+- `mnemo print` n'émet aucun label ni couleur : juste la commande et un saut de
+  ligne. Vous restez responsable de ce que vous faites de la sortie (la copier,
+  la relire, éventuellement l'exécuter vous-même).
+- Si une commande a déjà été nettoyée par `mnemo secrets redact`, c'est sa forme
+  **redactée** stockée qui est affichée.
+- Un ID inexistant produit une erreur claire sur stderr et un code de sortie non
+  nul.
+
+Détails et exemples supplémentaires dans [docs/SEARCH.md](docs/SEARCH.md).
 
 ### Statistiques
 
@@ -1016,7 +1043,9 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo search [requête]` | Ouvre la même TUI interactive ; la commande choisie est imprimée sur stdout. |
 | `mnemo search <requête> --print [--limit N]` | **Mode non interactif** : imprime les résultats sur stdout, sans TUI. |
 | `mnemo search --query <requête> --print` | Variante avec option explicite `--query`. |
-| `mnemo search <requête> [--project <nom>] [--branch <branche>] [--exit-code <n>] [--failed] [--since <durée\|date>] [--before <date>] [--cwd <chemin>] [--shell <shell>] [--limit N] [--json]` | **Recherche avancée** : filtres combinables par contexte Git, code de sortie, date, répertoire, shell ; sortie JSON stable avec `--print --json`. |
+| `mnemo search <requête> [--project <nom>] [--branch <branche>] [--exit-code <n>] [--failed] [--since <durée\|date>] [--before <date>] [--cwd <chemin>] [--shell <shell>] [--limit N] [--json] [--id-only]` | **Recherche avancée** : filtres combinables par contexte Git, code de sortie, date (`--since` accepte `24h`/`7d`/…, `--before` alias `--until`), répertoire, shell ; sortie JSON stable avec `--json`, IDs seuls avec `--id-only` (mode non interactif implicite). |
+| `mnemo show <id>` | Affiche le détail complet d'une commande (date, dossier, contexte Git, session, code retour, commande). Lecture seule : n'exécute **jamais** la commande. |
+| `mnemo print <id>` | Imprime uniquement la commande brute sur stdout (sans label ni couleur). N'exécute **jamais** la commande ; ID inexistant : erreur sur stderr, code non nul. |
 | `mnemo bashrc` | Affiche uniquement le snippet d'intégration Bash. |
 | `mnemo shell upgrade` | Met à niveau le bloc d'intégration Bash existant vers la version courante (capture de `MNEMO_SESSION_ID` pour `mnemo session`) : sauvegarde automatique, bloc remplacé proprement, reste du `~/.bashrc` intact. |
 | `mnemo migrate` | Applique les migrations de schéma SQLite en attente (idempotent, non destructif). |
@@ -1210,6 +1239,7 @@ src/
 ├── prune.rs       # nettoyage par ancienneté
 ├── maintenance.rs # maintenance automatique (status / run / dry-run)
 ├── list.rs        # listing et suppression d'entrées
+├── show.rs        # détail (mnemo show) et récupération brute (mnemo print)
 ├── confirm.rs     # confirmations interactives sûres
 ├── lifecycle.rs   # update / upgrade / uninstall (avec lifecycle/)
 ├── doctor.rs      # diagnostic de l'installation (mnemo doctor)
