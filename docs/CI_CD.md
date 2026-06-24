@@ -95,3 +95,20 @@ shell. Voir [docs/FUZZING.md](FUZZING.md) pour le détail des cibles.
   Durée courte par cible sur PR (30 s), plus longue sur `schedule` (120 s).
 - **Corpus** : aucun corpus n'est téléchargé ni versionné ; les entrées
   intéressantes restent locales et ignorées par git (`fuzz/.gitignore`).
+
+## Posture sécurité et OpenSSF Best Practices
+
+L'ensemble de ces workflows constitue une **posture de sécurité** documentée et
+sert de **preuves** pour préparer la demande de badge OpenSSF Best Practices :
+
+- `ci.yml` — build, tests, format et lint sur chaque PR ;
+- `codeql.yml` — analyse statique (SAST) ;
+- `audit.yml` — `cargo-audit`, `cargo-deny`, `cargo-machete`, `gitleaks` ;
+- `fuzz.yml` — fuzzing `cargo-fuzz` ;
+- `release.yml` / `release-smoke.yml` — intégrité et vérification des releases ;
+- `scorecard.yml` — suivi continu de la posture OpenSSF Scorecard.
+
+Le dossier de preuves est centralisé dans
+[docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Ces workflows
+**ne signifient pas** que le badge est acquis : il doit être demandé manuellement
+et n'est ajouté au README qu'une fois réellement accordé.

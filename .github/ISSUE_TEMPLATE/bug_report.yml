@@ -1,0 +1,51 @@
+name: Bug report
+description: Signaler un dysfonctionnement de mnemo
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de signaler un bug. Pour une **vulnérabilité de sécurité**, n'utilisez
+        pas ce formulaire public : suivez [SECURITY.md](../SECURITY.md).
+        N'incluez aucune donnée personnelle réelle ni secret.
+  - type: input
+    id: version
+    attributes:
+      label: Version de mnemo
+      description: Sortie de `mnemo version`.
+      placeholder: "ex. 1.6.9"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Système
+      description: Distribution, et natif ou WSL.
+      placeholder: "ex. Ubuntu 24.04 (WSL2)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes de reproduction
+      description: Étapes minimales pour reproduire le problème.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportement attendu vs observé
+      description: Ce que vous attendiez, et ce qui s'est réellement passé.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexte additionnel
+      description: Traces, logs ou captures utiles (sans données sensibles).
+    validations:
+      required: false

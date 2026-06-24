@@ -1661,6 +1661,11 @@ Les contributions sont les bienvenues. Le développement suit une règle simple 
 toute modification passe par une **branche dédiée** puis une **Pull Request**, le
 push direct sur `main` étant interdit par convention.
 
+Le guide complet du contributeur est dans [CONTRIBUTING.md](CONTRIBUTING.md). Le
+projet maintient par ailleurs un dossier de preuves
+[docs/OPENSSF_BEST_PRACTICES.md](docs/OPENSSF_BEST_PRACTICES.md) pour préparer une
+future demande de badge OpenSSF Best Practices (badge non encore obtenu).
+
 ### Mettre en place l'environnement
 
 ```bash
