@@ -1,6 +1,8 @@
 # Changelog
 
 
+## [1.6.8](https://github.com/Vesperis-group/mnemo/compare/v1.6.7...v1.6.8) (2026-06-24)
+
 ## [1.6.7](https://github.com/Vesperis-group/mnemo/compare/v1.6.6...v1.6.7) (2026-06-24)
 
 ## [1.6.6](https://github.com/Vesperis-group/mnemo/compare/v1.6.5...v1.6.6) (2026-06-24)
