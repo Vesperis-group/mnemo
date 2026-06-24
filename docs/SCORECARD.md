@@ -27,7 +27,7 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 | Branch-Protection | 3 | Protection non maximale sur `main` (pas d'approbation requise, pas de status checks) | Rulesets (non modifiés ici) | C |
 | Code-Review | 0 | 0/30 changesets approuvés | Nécessite revue + approbation (rulesets) | C |
 | Dependency-Update-Tool | 0 → 10 | Aucun outil de mise à jour détecté | `.github/dependabot.yml` ajouté | A (fait) |
-| Fuzzing | 0 | Projet non fuzzé | PR dédiée `feat/ci-fuzzing-baseline` | B (reporté) |
+| Fuzzing | 0 → attendu en hausse | Projet non fuzzé | Baseline `cargo-fuzz` ajoutée (`fuzz.yml`) | A (fait) |
 | CII-Best-Practices | 0 | Pas de badge OpenSSF Best Practices | Inscription manuelle du mainteneur | B (reporté) |
 | Maintained | 0 | Projet créé il y a moins de 90 jours | S'améliore avec le temps | — |
 | Contributors | 0 | 0 organisation contributrice | Hors de portée d'une PR | — |
@@ -52,11 +52,24 @@ workflow. Cette permission est désormais accordée **uniquement** au job
 `analyze` qui en a besoin (moindre privilège). La fonctionnalité CodeQL est
 inchangée : le job conserve `contents: read` et `security-events: write`.
 
+### Fuzzing (0 → hausse attendue)
+
+Ajout d'une baseline `cargo-fuzz` (moteur libFuzzer) via le workflow
+[`fuzz.yml`](../.github/workflows/fuzz.yml) et le crate
+[`fuzz/`](../fuzz). Trois cibles fuzzent des fonctions **pures** réellement
+sensibles, sans base de données, réseau ni shell :
+
+- `mdfmt_escape` — échappement Markdown (`src/mdfmt.rs`) ;
+- `secret_detection` — détection/redaction de secrets (`src/secrets.rs`) ;
+- `date_filter_parse` — parsing des durées/dates des filtres (`src/db.rs`,
+  `src/prune.rs`).
+
+Rust nightly et `cargo-fuzz` (version épinglée) ne sont utilisés **que** dans ce
+workflow ; le build, les tests et les releases restent sur la toolchain stable.
+Détails dans [docs/FUZZING.md](FUZZING.md).
+
 ## Points reportés (PR dédiées ou actions hors code)
 
-- **Fuzzing** : intégrer une baseline `cargo-fuzz` est un chantier à part entière
-  (`feat/ci-fuzzing-baseline`). Aucun fuzzing incomplet n'est ajouté ici pour ne
-  pas fausser le score.
 - **Vulnerabilities** : `lru` et `paste` proviennent de `ratatui 0.29.0` (version
   stable courante, qui dépend encore de `lru 0.12`). Les avis sont des
   `unmaintained`/`unsound` sans correctif simple ; ils sont autorisés dans

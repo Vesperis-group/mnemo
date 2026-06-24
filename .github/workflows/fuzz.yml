@@ -1,0 +1,75 @@
+name: Fuzz
+
+# Fuzzing de la baseline `mnemo` avec cargo-fuzz (libFuzzer).
+#
+# nightly Rust et cargo-fuzz ne sont utilisés QUE dans ce workflow : le build,
+# les tests et les releases normales restent sur la toolchain stable figée par
+# `rust-toolchain.toml`. Voir docs/FUZZING.md.
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "fuzz/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/fuzz.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "fuzz/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/fuzz.yml"
+  schedule:
+    # Campagne hebdomadaire plus longue, le dimanche à 05:00 UTC.
+    - cron: "0 5 * * 0"
+  workflow_dispatch:
+
+# Permissions minimales : lecture seule du contenu, aucun token d'écriture.
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: cargo-fuzz
+    runs-on: ubuntu-latest
+    env:
+      # Version épinglée de cargo-fuzz pour des runs reproductibles.
+      CARGO_FUZZ_VERSION: "0.13.2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain install nightly --profile minimal --no-self-update
+          rustup component add --toolchain nightly rust-src
+          rustup run nightly rustc --version
+
+      - name: Install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --version "${CARGO_FUZZ_VERSION}" --locked
+
+      - name: Build fuzz targets
+        run: cargo +nightly fuzz build
+
+      - name: Run fuzz targets
+        env:
+          RUST_BACKTRACE: "1"
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            duration=120
+          else
+            duration=30
+          fi
+          echo "Durée par cible : ${duration}s"
+          for target in mdfmt_escape secret_detection date_filter_parse; do
+            echo "::group::fuzz ${target}"
+            cargo +nightly fuzz run "${target}" -- -max_total_time="${duration}"
+            echo "::endgroup::"
+          done

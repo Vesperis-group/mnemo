@@ -25,24 +25,35 @@ pub fn parse_duration(spec: &str) -> Result<u64> {
     const HOUR: u64 = 3_600;
     const DAY: u64 = 86_400;
     let spec = spec.trim();
-    if spec.len() < 2 {
+
+    // L'unité est le dernier caractère ; on découpe sur une frontière de
+    // caractère UTF-8 pour ne jamais paniquer sur une entrée multi-octets.
+    let unit = spec
+        .chars()
+        .next_back()
+        .with_context(|| format!("durée invalide : {spec:?} (exemples : 24h, 30d, 12w, 6m, 1y)"))?;
+    let num = &spec[..spec.len() - unit.len_utf8()];
+    if num.is_empty() {
         bail!("durée invalide : {spec:?} (exemples : 24h, 30d, 12w, 6m, 1y)");
     }
-    let (num, unit) = spec.split_at(spec.len() - 1);
     let n: u64 = num
         .parse()
         .with_context(|| format!("durée invalide : {spec:?} (exemples : 24h, 30d, 12w, 6m, 1y)"))?;
     if n == 0 {
         bail!("durée invalide : {spec:?} (doit être strictement positive)");
     }
-    let secs = match unit {
-        "h" => n * HOUR,
-        "d" => n * DAY,
-        "w" => n * 7 * DAY,
-        "m" => n * 30 * DAY,
-        "y" => n * 365 * DAY,
+    let per_unit: u64 = match unit {
+        'h' => HOUR,
+        'd' => DAY,
+        'w' => 7 * DAY,
+        'm' => 30 * DAY,
+        'y' => 365 * DAY,
         other => bail!("unité de durée inconnue : {other:?} (utilisez h, d, w, m ou y)"),
     };
+    // `checked_mul` évite tout débordement sur des valeurs déraisonnables.
+    let secs = n
+        .checked_mul(per_unit)
+        .with_context(|| format!("durée trop grande : {spec:?}"))?;
     Ok(secs)
 }
 
@@ -162,5 +173,23 @@ mod tests {
         assert!(parse_duration("30x").is_err());
         assert!(parse_duration("0d").is_err());
         assert!(parse_duration("abc").is_err());
+    }
+
+    #[test]
+    fn parse_duration_multibyte_ne_panique_pas() {
+        // Régression (fuzzing) : une entrée multi-octets ne doit jamais paniquer
+        // en découpant l'unité au milieu d'un caractère UTF-8.
+        assert!(parse_duration("Ώ").is_err());
+        assert!(parse_duration("1Ώ").is_err());
+        assert!(parse_duration("é").is_err());
+        assert!(parse_duration("24é").is_err());
+    }
+
+    #[test]
+    fn parse_duration_overflow_est_une_erreur() {
+        // Régression (fuzzing) : une durée démesurée renvoie une erreur propre,
+        // sans débordement arithmétique.
+        assert!(parse_duration("99999999999999999999y").is_err());
+        assert!(parse_duration(&format!("{}y", u64::MAX)).is_err());
     }
 }
