@@ -10,7 +10,7 @@
   "devDependencies": {
     "@release-it/bumper": "7.0.6",
     "@release-it/conventional-changelog": "11.0.1",
-    "release-it": "20.2.0"
+    "release-it": "20.2.1"
   },
   "overrides": {
     "undici": "^7.28.0"
