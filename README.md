@@ -38,6 +38,7 @@ qui reste entièrement sur votre machine.
 - 🤖 Mode non interactif `--print` (et sorties JSON) pour les scripts et la CI.
 - 🚀 Onboarding guidé `mnemo init --wizard` et complétions shell `bash`, `zsh`, `fish`.
 - 🗂️ Sessions de travail : `mnemo session list/show/export` (Markdown ou JSON).
+- 📋 **Runbook** : génère un document Markdown ou JSON réutilisable (audit, release, post-mortem) depuis une session ou un projet, avec redaction des secrets activée par défaut (`mnemo runbook`).
 - 🛡️ Nettoyage des secrets de l'historique : `mnemo secrets scan/redact` (dry-run par défaut).
 - 🎯 Inspection et récupération sûres : `mnemo show <id>`, `mnemo print <id>` (jamais d'exécution automatique).
 
@@ -55,6 +56,7 @@ qui reste entièrement sur votre machine.
   - [Gestion des données](#gestion-des-données)
   - [Maintenance automatique](#maintenance-automatique)
   - [Sessions de travail](#sessions-de-travail)
+  - [Runbook](#runbook)
   - [Nettoyage des secrets](#nettoyage-des-secrets)
   - [Configuration](#configuration)
   - [Intégration Bash](#intégration-bash)
@@ -724,6 +726,74 @@ l'historique n'est jamais exécutée, et les commandes déjà redactées le rest
 Un fichier de sortie existant n'est jamais écrasé sans `--force`. Détails dans
 [docs/PROJECTS.md](docs/PROJECTS.md).
 
+### Runbook
+
+`mnemo runbook` génère un document **Markdown ou JSON réutilisable** — procédure
+de release, rapport d'audit, post-mortem d'incident — à partir des commandes
+d'une session ou d'un projet Git. Les commandes sont triées chronologiquement,
+les lignes vides exclues, et les **secrets sont redactés par défaut** avant
+inclusion.
+
+```bash
+mnemo runbook --last                                   # runbook de la dernière session
+mnemo runbook --session <ID>                           # session explicite
+mnemo runbook --project ~/mnemo \
+  --title "Release v1.6.23" \
+  --output docs/runbooks/release.md                   # runbook de release
+mnemo runbook --last --format json | jq .             # export JSON parseable
+mnemo runbook --project mnemo --group-by cwd          # sections par répertoire
+mnemo runbook --last --no-redact                      # désactive la redaction
+```
+
+Exactement un des drapeaux `--last`, `--session <ID>` ou `--project <NOM|CHEMIN>`
+est requis. `--output` écrit dans un fichier (jamais écrasé sans `--force`) ;
+sans `--output`, le résultat va sur stdout. `--limit N` borne le nombre de
+commandes. `--group-by cwd` ou `--group-by project` structure le document en
+sections (défaut : liste plate numérotée).
+
+Exemple de sortie Markdown (`--format markdown`, défaut) :
+
+```text
+# Runbook - Release v1.6.23
+
+## Metadata
+
+- Source: projet mnemo
+- Generated at: 2026-08-03 11:00:00
+- Commands: 2
+
+## Commands
+
+### 1. ~/mnemo
+
+```bash
+cargo test --locked
+```
+
+### 2. ~/mnemo
+
+```bash
+git tag v1.6.23
+```
+```
+
+Exemple JSON (`--format json`) :
+
+```json
+{
+  "title": "Release v1.6.23",
+  "source": "projet mnemo",
+  "generated_at": "2026-08-03 11:00:00",
+  "commands": [
+    { "n": 1, "cwd": "~/mnemo", "timestamp": "2026-08-03 10:55:00", "command": "cargo test --locked" },
+    { "n": 2, "cwd": "~/mnemo", "timestamp": "2026-08-03 10:57:00", "command": "git tag v1.6.23" }
+  ]
+}
+```
+
+Cas d'usage DevSecOps : runbook de release, audit supply chain, post-mortem
+d'incident, export JSON pour un ticket ITSM. Détails et référence complète dans
+[docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ### Nettoyage des secrets
 
@@ -1094,6 +1164,7 @@ interactif, `--purge` exige aussi `--yes`.
 | `mnemo session list [--limit N]` | Liste les sessions de travail (groupées par `session_id`), de la plus récente à la plus ancienne. |
 | `mnemo session show <session_id> [--limit N]` | Affiche les commandes d'une session dans l'ordre chronologique. |
 | `mnemo session export [<session_id>\|--last] [--format markdown\|json] [--output <fichier>] [--force]` | Exporte une session en Markdown (défaut) ou JSON ; stdout par défaut, jamais d'écrasement sans `--force`. |
+| `mnemo runbook (--last\|--session <ID>\|--project <NOM\|CHEMIN>) [--output <fichier>] [--force] [--limit N] [--title <titre>] [--format markdown\|json] [--no-redact] [--group-by none\|cwd\|project]` | Génère un runbook Markdown (défaut) ou JSON depuis la dernière session, une session ou un projet ; redaction des secrets activée par défaut ; stdout par défaut, jamais d'écrasement sans `--force`. |
 | `mnemo secrets scan [--limit N] [--json]` | Repère dans l'historique stocké les commandes potentiellement sensibles, toujours affichées redactées (lecture seule). |
 | `mnemo secrets redact [--apply] [--yes] [--backup]` | Redacte en place les commandes sensibles ; dry-run par défaut, sauvegarde obligatoire avant écriture, seule la colonne `command` est modifiée. |
 | `mnemo config <show\|path\|edit\|validate>` | Affiche, localise, édite (`$EDITOR`, sauvegarde automatique) ou valide la configuration. |

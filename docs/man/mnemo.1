@@ -137,6 +137,59 @@ modification et seule la colonne
 .I command
 est réécrite.
 .TP
+.B runbook (--last|--session \fISESSION_ID\fR|--project \fINOM|CHEMIN\fR) [--output \fIFICHIER\fR] [--force] [--limit \fIN\fR] [--title \fITITRE\fR] [--format markdown|json] [--no-redact] [--group-by none|cwd|project]
+Génère un document Markdown (défaut) ou JSON réutilisable à partir des
+commandes d'une session ou d'un projet Git. Exactement un des drapeaux
+.BR --last ,
+.BR --session " ou"
+.B --project
+est requis. Les commandes sont triées chronologiquement (le plus ancien en
+premier) et les lignes vides sont exclues. Les secrets sont
+.B redactés par défaut
+(\fB--no-redact\fR pour désactiver). Écrit sur la sortie standard sauf si
+.B --output
+est fourni ; n'écrase jamais un fichier existant sans
+.BR --force .
+.PP
+.RS
+Options de
+.BR runbook :
+.TP
+.B --last
+Cible la dernière session enregistrée.
+.TP
+.BI --session " SESSION_ID"
+Session explicite.
+.TP
+.BI --project " NOM|CHEMIN"
+Nom court ou chemin
+.I git_root
+d'un projet.
+.TP
+.BI --output " FICHIER"
+Fichier de sortie (défaut : stdout).
+.TP
+.B --force
+Autorise l'écrasement du fichier de sortie s'il existe déjà.
+.TP
+.BI --limit " N"
+Nombre maximal de commandes incluses.
+.TP
+.BI --title " TITRE"
+Titre personnalisé (défaut : identifiant de session ou nom de projet).
+.TP
+.B --format markdown|json
+Format de sortie (défaut : \fBmarkdown\fR).
+.TP
+.B --no-redact
+Désactive la redaction des secrets (activée par défaut).
+.TP
+.B --group-by none|cwd|project
+Mode de groupement : \fBnone\fR (liste plate numérotée, défaut), \fBcwd\fR
+(sections par répertoire de travail) ou \fBproject\fR (sections par racine
+Git).
+.RE
+.TP
 .B doctor
 Diagnostique l'installation (configuration, base, intégration shell,
 permissions).
@@ -170,8 +223,17 @@ Lister les échecs récents d'un projet, puis récupérer une commande :
 .TP
 Afficher le détail puis imprimer la commande 128 :
 .B mnemo show 128 ; mnemo print 128
+.TP
+Générer un runbook de la dernière session :
+.B mnemo runbook --last
+.TP
+Générer un runbook de release pour le projet mnemo :
+.B mnemo runbook --project mnemo --title "Release v1.6.23" --output release.md
+.TP
+Exporter un runbook en JSON pour traitement machine :
+.B mnemo runbook --last --format json | jq .
 .SH SEE ALSO
 .BR bash (1),
 .BR sqlite3 (1)
 .PP
-Documentation : docs/UX_ONBOARDING.md, docs/SESSIONS.md, docs/PROJECTS.md
+Documentation : docs/UX_ONBOARDING.md, docs/SESSIONS.md, docs/PROJECTS.md, docs/RUNBOOK.md
