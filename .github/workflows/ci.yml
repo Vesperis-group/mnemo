@@ -113,15 +113,18 @@ jobs:
           MNEMO_SESSION_ID: smoke-runbook-ci
         run: |
           set -euo pipefail
-          ./target/release/mnemo add --cmd "echo hello world" --exit-code 0
-          ./target/release/mnemo add --cmd "git status" --exit-code 0
-          ./target/release/mnemo add --cmd "ls -la" --exit-code 0
+          ./target/release/mnemo add --cmd "echo hello world" --cwd "${PWD}" --exit-code 0
+          ./target/release/mnemo add --cmd "git status" --cwd "${PWD}/src" --exit-code 0
+          ./target/release/mnemo add --cmd "ls -la" --cwd "${PWD}/tests" --exit-code 0
+          ./target/release/mnemo add --cmd "curl https://user:pass@example.com/data" --cwd "/tmp/mnemo-runbook-smoke" --exit-code 0
 
       - name: Smoke tests runbook
         env:
           HOME: ${{ runner.temp }}/mnemo-runbook-smoke
         run: |
           set -euo pipefail
+          command -v jq >/dev/null
+          secret_fragment="user:pass@"
 
           # Test 1: --last produces non-empty output
           output="$(./target/release/mnemo runbook --last)"
@@ -141,3 +144,32 @@ jobs:
           limited="$(./target/release/mnemo runbook --last --limit 1)"
           echo "${limited}" | grep -q "^- Commands: 1$" || { echo "FAIL: --limit 1 did not limit to 1 command" >&2; exit 1; }
           echo "OK: --limit 1 includes exactly 1 command"
+
+          # Test 5: --format json returns valid JSON
+          json="$(./target/release/mnemo runbook --last --format json)"
+          echo "${json}" | jq -e '.commands | type == "array" and length == 4' >/dev/null || { echo "FAIL: --format json output is invalid" >&2; exit 1; }
+          echo "OK: --format json returns valid JSON"
+
+          # Test 6: redaction enabled by default
+          echo "${output}" | grep -q "${secret_fragment}" && { echo "FAIL: default output leaked raw credential" >&2; exit 1; }
+          echo "${output}" | grep -Eq "\\[REDACTED\\]|\\[REDACTED COMMAND\\]" || { echo "FAIL: default output missing redaction marker" >&2; exit 1; }
+          echo "OK: redaction is enabled by default"
+
+          # Test 7: --no-redact keeps raw command text
+          raw="$(./target/release/mnemo runbook --last --no-redact)"
+          echo "${raw}" | grep -q "${secret_fragment}" || { echo "FAIL: --no-redact did not keep raw credential" >&2; exit 1; }
+          echo "OK: --no-redact keeps raw command text"
+
+          # Test 8: --group-by cwd includes group fields and multiple groups
+          json_cwd="$(./target/release/mnemo runbook --last --format json --group-by cwd)"
+          echo "${json_cwd}" | jq -e '.commands | length > 0 and all(.[]; has("group") and (.group | type == "string" and length > 0))' >/dev/null || { echo "FAIL: --group-by cwd missing group fields" >&2; exit 1; }
+          cwd_groups="$(echo "${json_cwd}" | jq '[.commands[].group] | unique | length')"
+          [ "${cwd_groups}" -ge 2 ] || { echo "FAIL: --group-by cwd should create at least 2 groups" >&2; exit 1; }
+          echo "OK: --group-by cwd groups commands"
+
+          # Test 9: --group-by project includes group fields and multiple groups
+          json_project="$(./target/release/mnemo runbook --last --format json --group-by project)"
+          echo "${json_project}" | jq -e '.commands | length > 0 and all(.[]; has("group") and (.group | type == "string" and length > 0))' >/dev/null || { echo "FAIL: --group-by project missing group fields" >&2; exit 1; }
+          project_groups="$(echo "${json_project}" | jq '[.commands[].group] | unique | length')"
+          [ "${project_groups}" -ge 2 ] || { echo "FAIL: --group-by project should create at least 2 groups" >&2; exit 1; }
+          echo "OK: --group-by project groups commands"
