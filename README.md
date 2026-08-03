@@ -156,7 +156,7 @@ MNEMO_ASSUME_YES=1 ... bash ...   # confirme automatiquement
 MNEMO_NO_BASHRC=1  ... bash ...   # n'ajoute pas le bloc .bashrc
 ```
 
-### Installation via crates.io (préparation)
+### Installation via crates.io
 
 Le package crates.io est nommé `mnemo-rs`, mais le binaire installé reste
 `mnemo`.
@@ -165,9 +165,6 @@ Le package crates.io est nommé `mnemo-rs`, mais le binaire installé reste
 cargo install mnemo-rs
 mnemo --help
 ```
-
-> Cette commande sera utilisable après la première publication officielle sur
-> crates.io.
 
 ### Vérification de signature Sigstore
 

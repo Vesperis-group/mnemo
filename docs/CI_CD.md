@@ -14,6 +14,7 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 | `lint.yml` | push, pull_request | `actionlint` et `ShellCheck`. |
 | `release.yml` | merge sur `main` | Release automatique signée (cosign, SBOM, provenance). |
 | `release-smoke.yml` | release publiée, manuel, hebdomadaire | Smoke tests d'installation post-release. |
+| `publish-crates.yml` | release publiée, manuel | Publication `mnemo-rs` sur crates.io via OIDC Trusted Publishing. |
 | `scorecard.yml` | push `main`, règle de branche, hebdomadaire, manuel | OpenSSF Scorecard (posture sécurité open source). |
 | `fuzz.yml` | pull_request, push `main`, hebdomadaire, manuel | Fuzzing `cargo-fuzz` (libFuzzer) des fonctions pures sensibles. |
 
@@ -23,12 +24,35 @@ mises à jour de dépendances. Dependabot conserve l'épinglage des actions par 
 et n'active aucun auto-merge. Voir [docs/SCORECARD.md](SCORECARD.md) pour la
 posture OpenSSF Scorecard détaillée.
 
-## Packaging crates.io (préparation)
+## Publication crates.io
 
-Le package crates.io est préparé sous le nom `mnemo-rs` (binaire `mnemo`), mais
-la publication n'est pas automatisée dans cette phase : aucun workflow CI ne
-fait de `cargo publish`. La première publication sera réalisée manuellement,
-puis le Trusted Publishing (OIDC) sera ajouté dans une PR dédiée.
+Le package crates.io est nommé `mnemo-rs` (binaire `mnemo`, lib interne `mnemo`).
+La publication est automatisée via [`publish-crates.yml`](../.github/workflows/publish-crates.yml)
+dès qu'une GitHub Release est publiée.
+
+### Flow de publication
+
+1. L'événement `release.published` déclenche `publish-crates.yml`.
+2. Le workflow vérifie que le package s'appelle bien `mnemo-rs` et que la version n'est pas déjà présente sur crates.io.
+3. `cargo publish --dry-run --locked` est exécuté en amont.
+4. L'authentification crates.io utilise **OIDC Trusted Publishing** via l'action `rust-lang/crates-io-auth-action` : aucun token long terme `CRATES_IO_TOKEN` n'est stocké dans GitHub Secrets.
+5. `cargo publish --locked` publie la version.
+
+### Prérequis (setup manuel unique)
+
+Côté crates.io - aller dans **Settings → Trusted Publishing → Add trusted publisher** pour `mnemo-rs` :
+
+| Champ | Valeur |
+| --- | --- |
+| Repository owner | `Vesperis-group` |
+| Repository name | `mnemo` |
+| Workflow filename | `publish-crates.yml` |
+| Environment | `crates-io` |
+
+Côté GitHub - créer un **environment** nommé `crates-io` (Settings → Environments).
+Le job `publish` utilise cet environment ; il est possible d'y ajouter des règles de protection (approbation manuelle, délai, etc.).
+
+Aucun secret `CRATES_IO_TOKEN` n'est ajouté ni nécessaire. Le job demande `id-token: write` uniquement pour obtenir le token OIDC court terme ; toutes les autres permissions restent en lecture seule.
 
 ## `release-smoke.yml`
 
