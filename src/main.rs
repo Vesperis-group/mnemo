@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use mnemo::{
     backup, cli, completions, config, db, doctor, export, filter, gitctx, importer, init,
-    lifecycle, list, maintenance, project, prune, secrets, session, shell, show, stats, tui,
-    version,
+    lifecycle, list, maintenance, project, prune, runbook, secrets, session, shell, show, stats,
+    tui, version,
 };
 
 use cli::{Cli, Command};
@@ -202,6 +202,15 @@ fn run() -> Result<()> {
                 backup,
             } => secrets::run_redact(dry_run, apply, yes, backup),
         },
+        Command::Runbook {
+            last,
+            session,
+            project,
+            output,
+            force,
+            limit,
+            title,
+        } => runbook::run(last, session, project, output, force, limit, title),
     }
 }
 

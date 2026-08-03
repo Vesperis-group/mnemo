@@ -29,6 +29,7 @@ pub mod mdfmt;
 pub mod migrations;
 pub mod project;
 pub mod prune;
+pub mod runbook;
 pub mod secrets;
 pub mod session;
 pub mod shell;
