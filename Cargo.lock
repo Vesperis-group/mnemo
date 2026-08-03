@@ -1019,7 +1019,7 @@ dependencies = [
 
 [[package]]
 name = "mnemo-rs"
-version = "1.6.22"
+version = "1.6.23"
 dependencies = [
  "anyhow",
  "clap",
