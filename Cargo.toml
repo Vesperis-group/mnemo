@@ -1,14 +1,33 @@
 [package]
-name = "mnemo"
+name = "mnemo-rs"
 version = "1.6.19"
 edition = "2021"
-description = "Local-first shell history assistant with search, project context, TUI, backups, maintenance and verifiable releases"
+description = "Local-first shell history manager with CLI/TUI, fuzzy search, project/session context, and DevSecOps-focused release hardening."
 license = "MIT"
 authors = ["Killian Van Ruymbeke"]
 readme = "README.md"
 repository = "https://github.com/Vesperis-group/mnemo"
-keywords = ["history", "bash", "tui", "fuzzy", "cli"]
-categories = ["command-line-utilities"]
+homepage = "https://github.com/Vesperis-group/mnemo"
+keywords = ["cli", "shell", "history", "sqlite", "tui"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    ".github/**",
+    "target/**",
+    "fuzz/target/**",
+    "node_modules/**",
+    "docs/assets/*.mp4",
+    "package.json",
+    "package-lock.json",
+    "release-it.json",
+    "dist/**",
+    "out/**",
+    "coverage/**",
+    "*.log",
+]
+
+[lib]
+name = "mnemo"
+path = "src/lib.rs"
 
 [[bin]]
 name = "mnemo"

@@ -18,6 +18,7 @@ repository so the form can be filled in quickly and honestly.
 | OSS license | MIT license, OSI-recognized | [LICENSE](../LICENSE) |
 | Version control | Public Git repository on GitHub | `https://github.com/Vesperis-group/mnemo` |
 | Release process & versioning | Semantic versioning, automated signed releases | [docs/RELEASE_APP.md](RELEASE_APP.md), [.github/workflows/release.yml](../.github/workflows/release.yml) |
+| Distribution registry | crates.io package prepared as `mnemo-rs` (binary remains `mnemo`) | [Cargo.toml](../Cargo.toml), [README.md](../README.md) |
 | Security policy | Private vulnerability reporting process | [SECURITY.md](../SECURITY.md) |
 | Threat model | Documented security assumptions | [docs/THREAT_MODEL.md](THREAT_MODEL.md) |
 | Contribution process | Contributor guide and expectations | [CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -67,6 +68,9 @@ the form.
   faked (see [docs/SCORECARD.md](SCORECARD.md)).
 - Some criteria (e.g. cryptographic signing of every individual artifact) are
   partially met; answer them accurately rather than optimistically.
+- crates.io distribution is prepared but may not yet be published at the time of
+  form review; do not claim automated registry publishing until Trusted
+  Publishing is configured.
 
 ## Badge status
 

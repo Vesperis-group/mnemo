@@ -31,7 +31,7 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 | CII-Best-Practices | 0 | Badge OpenSSF Best Practices niveau Passing obtenu (projet 13366) | Le check passe au vert au prochain scan Scorecard | A (obtenu) |
 | Maintained | 0 | Projet créé il y a moins de 90 jours | S'améliore avec le temps | - |
 | Contributors | 0 | 0 organisation contributrice | Hors de portée d'une PR (pas de faux contributeurs) | - |
-| Packaging | -1 | Aucun workflow de packaging reconnu | Non concluant (publication binaire via GitHub App) | - |
+| Packaging | -1 | Aucun packaging registry encore détecté par Scorecard | Publication crates.io préparée (`mnemo-rs`), sans automation OIDC à ce stade | - |
 
 ## Corrections appliquées
 
@@ -116,5 +116,6 @@ gaming.
 ## Limites assumées
 
 - `Maintained`, `Contributors` et `Packaging` dépendent de facteurs temporels,
-  organisationnels ou de mode de distribution propres au projet : ils ne sont pas
-  « jouables » par des changements cosmétiques et ne sont pas forcés artificiellement.
+  organisationnels ou de mode de distribution propres au projet. Le package
+  crates.io (`mnemo-rs`) est préparé, mais la publication initiale (puis
+  l'automatisation Trusted Publishing) reste volontairement séparée.
