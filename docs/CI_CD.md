@@ -30,10 +30,10 @@ utilisable par un utilisateur final, en empruntant le chemin officiel
 `scripts/install.sh`.
 
 - **Déclencheurs** :
-  - `release: [published]` — teste le tag qui vient d'être publié.
-  - `workflow_dispatch` — teste un tag fourni en entrée (`version`), ou la
+  - `release: [published]` - teste le tag qui vient d'être publié.
+  - `workflow_dispatch` - teste un tag fourni en entrée (`version`), ou la
     dernière release si l'entrée est vide.
-  - `schedule` (lundi 06:00 UTC) — revalide la dernière release publiée.
+  - `schedule` (lundi 06:00 UTC) - revalide la dernière release publiée.
 - **Permissions** : `contents: read` uniquement. Le workflow **ne publie rien**
   et n'utilise aucun jeton en écriture.
 - **Résolution de version** : tag de l'évènement `release`, sinon entrée
@@ -101,12 +101,12 @@ shell. Voir [docs/FUZZING.md](FUZZING.md) pour le détail des cibles.
 L'ensemble de ces workflows constitue une **posture de sécurité** documentée et
 sert de **preuves** pour le badge OpenSSF Best Practices :
 
-- `ci.yml` — build, tests, format et lint sur chaque PR ;
-- `codeql.yml` — analyse statique (SAST) ;
-- `audit.yml` — `cargo-audit`, `cargo-deny`, `cargo-machete`, `gitleaks` ;
-- `fuzz.yml` — fuzzing `cargo-fuzz` ;
-- `release.yml` / `release-smoke.yml` — intégrité et vérification des releases ;
-- `scorecard.yml` — suivi continu de la posture OpenSSF Scorecard.
+- `ci.yml` - build, tests, format et lint sur chaque PR ;
+- `codeql.yml` - analyse statique (SAST) ;
+- `audit.yml` - `cargo-audit`, `cargo-deny`, `cargo-machete`, `gitleaks` ;
+- `fuzz.yml` - fuzzing `cargo-fuzz` ;
+- `release.yml` / `release-smoke.yml` - intégrité et vérification des releases ;
+- `scorecard.yml` - suivi continu de la posture OpenSSF Scorecard.
 
 Le dossier de preuves est centralisé dans
 [docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Le projet a obtenu le

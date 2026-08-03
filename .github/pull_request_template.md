@@ -9,11 +9,11 @@ N'ajoutez aucun footer `Co-authored-by` ni mention d'assistant dans les commits.
 
 ## Type de changement
 
-- [ ] `fix` — correction de bug
-- [ ] `feat` — nouvelle fonctionnalité
-- [ ] `docs` — documentation
-- [ ] `ci` / `chore` — outillage, CI, maintenance
-- [ ] `refactor` / `test` — refactorisation ou tests
+- [ ] `fix` - correction de bug
+- [ ] `feat` - nouvelle fonctionnalité
+- [ ] `docs` - documentation
+- [ ] `ci` / `chore` - outillage, CI, maintenance
+- [ ] `refactor` / `test` - refactorisation ou tests
 
 ## Checklist
 
