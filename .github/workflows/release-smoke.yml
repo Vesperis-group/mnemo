@@ -1,14 +1,3 @@
-# Smoke tests post-release : verifient qu'une release publiee est reellement
-# installable et utilisable par un utilisateur final, via le chemin officiel
-# scripts/install.sh. Ce workflow ne publie rien et n'a que des permissions
-# en lecture seule ; il ne duplique pas la logique de signature/provenance de
-# release.yml (smoke test d'installation, pas re-verification cosign complete).
-#
-# Actions tierces epinglees par SHA de commit complet (jamais de tag flottant).
-# Pour mettre a jour une action :
-#   git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>
-# puis remplacer le SHA et le commentaire `# <tag>`. Pour un tag annote, utiliser
-# la ligne `<sha> refs/tags/<tag>^{}` (objet commit dereference).
 name: Release smoke tests
 
 on:
@@ -21,7 +10,6 @@ on:
         required: false
         type: string
   schedule:
-    # Tous les lundis a 06h00 UTC : revalide la derniere release publiee.
     - cron: "0 6 * * 1"
 
 permissions:
@@ -60,7 +48,6 @@ jobs:
               ;;
           esac
           if [ -z "${version}" ]; then
-            # schedule, ou dispatch sans entree : derniere release publiee.
             version="$(gh release view --repo "${REPO}" --json tagName --jq '.tagName')"
           fi
           case "${version}" in
@@ -99,7 +86,6 @@ jobs:
 
       - name: Installer mnemo via scripts/install.sh
         env:
-          # HOME temporaire et isole : aucune ecriture dans le vrai HOME du runner.
           HOME: ${{ runner.temp }}/mnemo-smoke-home
           MNEMO_ASSUME_YES: "1"
           MNEMO_NO_BASHRC: "1"
@@ -117,7 +103,6 @@ jobs:
           set -euo pipefail
           export PATH="${HOME}/.local/bin:${PATH}"
 
-          # Version installee == tag teste.
           mnemo version
           mnemo version > "${HOME}/smoke-version.txt"
           installed="$(head -n1 "${HOME}/smoke-version.txt")"
@@ -127,7 +112,6 @@ jobs:
             exit 1
           }
 
-          # init est deja execute par install.sh ; on reverifie l'idempotence.
           mnemo init
           mnemo doctor
 
@@ -142,13 +126,11 @@ jobs:
           mnemo project --help >/dev/null
           mnemo uninstall --help >/dev/null
 
-          # Cycle de vie reel : ajout, recherche, inspection.
           mnemo add --cmd "echo hello" --exit-code 0
           mnemo search hello --id-only > "${HOME}/smoke-ids.txt"
           id="$(head -n1 "${HOME}/smoke-ids.txt")"
           test -n "${id}"
           mnemo show "${id}"
-          # `mnemo print` est consulte mais sa sortie n'est JAMAIS executee.
           mnemo print "${id}" >/dev/null
 
           mnemo secrets scan
@@ -198,7 +180,6 @@ jobs:
           glibc="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-gnu-glibc2.35.tar.gz"
           musl="mnemo-${MNEMO_VERSION}-x86_64-unknown-linux-musl.tar.gz"
           checks="mnemo-${MNEMO_VERSION}-checksums.txt"
-          # On ne valide que les deux archives (le SBOM n'est pas telecharge ici).
           grep -E "  (${glibc}|${musl})$" "${checks}" > to-verify.txt
           test "$(wc -l < to-verify.txt)" -eq 2
           sha256sum -c to-verify.txt

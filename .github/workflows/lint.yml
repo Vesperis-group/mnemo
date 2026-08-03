@@ -1,11 +1,5 @@
 name: Lint (workflows & shell)
 
-# Vérifie la qualité des fichiers d'infrastructure :
-#   - actionlint : lint statique des workflows GitHub Actions.
-#   - ShellCheck : analyse statique des scripts shell.
-#
-# Indépendant de la CI Rust pour ne pas allonger le cycle build/test, et exécuté
-# sur les PR comme sur les push vers main.
 on:
   push:
     branches: [main]
@@ -13,24 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Permissions minimales : lecture seule du dépôt.
 permissions:
   contents: read
 
 concurrency:
   group: lint-${{ github.ref }}
   cancel-in-progress: true
-
-# ---------------------------------------------------------------------------
-# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
-# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
-# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
-#
-# actionlint et ShellCheck sont installés en VERSION EXACTE, avec vérification
-# du checksum SHA-256 AVANT exécution (pas de `curl | bash`, pas de binaire
-# exécuté si l'empreinte ne correspond pas). Pour mettre à jour une version :
-# récupérer le SHA-256 depuis le fichier de checksums de la release amont.
-# ---------------------------------------------------------------------------
 
 jobs:
   actionlint:

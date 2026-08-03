@@ -1,17 +1,12 @@
 name: Audit (DevSecOps)
 
-# Audit de sécurité et de la chaîne d'approvisionnement.
-# Tourne sur les PR et les push sur main. Indépendant de la CI principale pour
-# que les outils d'audit n'allongent pas le cycle de build/test habituel.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  # Permet un déclenchement manuel depuis l'onglet Actions.
   workflow_dispatch:
 
-# Permissions minimales : lecture seule du dépôt.
 permissions:
   contents: read
 
@@ -21,17 +16,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-
-# ---------------------------------------------------------------------------
-# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
-# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
-# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
-#
-# Rust figé par rust-toolchain.toml (rustup du runner). Runner ubuntu-24.04.
-# Outils d'audit installés en VERSION EXACTE + `--locked` (pas de version
-# flottante) ; pour mettre à jour, vérifier la dernière version stable sur
-# crates.io puis figer le numéro ci-dessous.
-# ---------------------------------------------------------------------------
 
 jobs:
   supply-chain:
@@ -83,15 +67,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Le binaire CLI open-source est utilisé directement plutôt que l'action
-      # gitleaks/gitleaks-action@v2, qui exige une licence payante sur les
-      # dépôts appartenant à une organisation GitHub.
-      #
-      # Version épinglée + checksum SHA-256 vérifié AVANT installation : aucun
-      # binaire n'est exécuté si l'empreinte ne correspond pas (pas de
-      # `curl | bash`, pas d'installation sans vérification).
-      # Pour mettre à jour : récupérer le SHA depuis
-      #   https://github.com/gitleaks/gitleaks/releases/download/v<ver>/gitleaks_<ver>_checksums.txt
       - name: Install gitleaks CLI (checksum vérifié)
         run: |
           set -euo pipefail

@@ -1,26 +1,5 @@
 name: Publish crates.io
 
-# Publishes mnemo-rs to crates.io when a GitHub Release is published, using
-# OIDC Trusted Publishing (no long-lived CRATES_IO_TOKEN secret stored in
-# GitHub). A workflow_dispatch trigger allows a controlled manual publish.
-#
-# Prerequisites (manual one-time setup, see docs/CI_CD.md):
-#   1. Create a GitHub environment named "crates-io".
-#   2. On crates.io → mnemo-rs → Settings → Trusted Publishing → Add trusted publisher:
-#        Repository owner : Vesperis-group
-#        Repository name  : mnemo
-#        Workflow filename: publish-crates.yml
-#        Environment      : crates-io
-#
-# The "already published" check in step `version` writes already_published=true|false.
-# All publish steps are conditioned on already_published == 'false' so a
-# re-triggered run (e.g. after a transient failure) does not fail on a
-# "crate version already uploaded" error.
-#
-# Actions pinned by full commit SHA (supply chain). To update:
-#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
-# (for annotated tags use the SHA on the `^{}` line), then replace hash AND comment.
-
 on:
   release:
     types: [published]

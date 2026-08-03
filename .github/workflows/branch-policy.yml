@@ -1,17 +1,5 @@
 name: Branch policy
 
-# Garde-fou « best-effort » côté CI pour rappeler le flux de contribution.
-#
-# ⚠️ Ceci ne remplace PAS la vraie protection de branche. La protection
-# effective de `main` doit être configurée dans GitHub :
-#   Settings → Rules → Rulesets  (ou Settings → Branches → Branch protection)
-# Voir la section « Politique de branche » du README et docs/REPOSITORY_RULES.md.
-#
-# Ce workflow :
-#   - sur pull_request : vérifie que la PR ne provient pas directement de `main`.
-#   - sur push direct sur `main` (hors commit de release) : journalise un
-#     avertissement pour signaler un contournement du flux PR.
-
 on:
   pull_request:
     branches: [main]
@@ -28,9 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: La PR doit venir d'une branche dédiée
-        # github.head_ref est une donnée contrôlée par l'auteur de la PR : on la
-        # passe par une variable d'environnement plutôt que de l'interpoler
-        # directement dans le script (durcissement injection, cf. actionlint).
+        # Evite l'interpolation directe de github.head_ref dans le script.
         env:
           HEAD_REF: ${{ github.head_ref }}
         run: |
