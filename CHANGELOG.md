@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.9.3](https://github.com/Vesperis-group/mnemo/compare/v1.9.2...v1.9.3) (2026-08-03)
+
+### Bug Fixes
+
+* align release-it conventional-changelog with release-it v21 ([#95](https://github.com/Vesperis-group/mnemo/issues/95)) ([629a836](https://github.com/Vesperis-group/mnemo/commit/629a836734088ae201aaa68f5a967d1d15758edf))
+
 ## [1.9.2](https://github.com/Vesperis-group/mnemo/compare/v1.9.1...v1.9.2) (2026-08-03)
 
 ## [1.9.1](https://github.com/Vesperis-group/mnemo/compare/v1.9.0...v1.9.1) (2026-08-03)
