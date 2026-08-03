@@ -66,21 +66,20 @@ déclenche sur les mêmes triggers (`push`, `pull_request` sur `main`).
 2. **Isolation** : initialise un `HOME` temporaire et isolé
    (`${{ runner.temp }}/mnemo-runbook-smoke`) puis exécute `mnemo init` pour
    créer une base SQLite propre.
-3. **Injection** : ajoute trois commandes de test via `mnemo add --cmd … --exit-code 0`
+3. **Injection** : ajoute quatre commandes de test via `mnemo add --cmd … --exit-code 0`
    sous un `MNEMO_SESSION_ID` fixe (`smoke-runbook-ci`), ce qui les rattache à
-   une session identifiable par `--last`.
+   une session identifiable par `--last`. Les commandes couvrent plusieurs
+   `cwd` et un cas hors dépôt (`/tmp`) pour exercer aussi `--group-by project`.
 4. **Tests smoke** :
    - `mnemo runbook --last` → sortie non vide.
    - La sortie contient `# Runbook`.
    - `mnemo runbook --last --output <fichier>` → le fichier est créé.
    - `mnemo runbook --last --limit 1` → la métadonnée `- Commands: 1` est présente.
-
-### Couverture future
-
-Les cas suivants ne sont pas encore couverts par `runbook-smoke` et peuvent être ajoutés dans une PR dédiée :
-- `--format json` : vérifier que la sortie est du JSON valide (via `jq`).
-- `--no-redact` : vérifier que les commandes ne sont pas filtrées.
-- `--group-by cwd` / `--group-by project` : vérifier la présence des sections de groupement.
+   - `mnemo runbook --last --format json` → JSON valide, structure attendue (`commands`).
+   - Redaction active par défaut → la sortie ne contient pas les identifiants bruts.
+   - `mnemo runbook --last --no-redact` → la sortie conserve les identifiants bruts.
+   - `mnemo runbook --last --format json --group-by cwd` → chaque commande contient `group`, avec au moins deux groupes.
+   - `mnemo runbook --last --format json --group-by project` → chaque commande contient `group`, avec au moins deux groupes.
 
 ## `release-smoke.yml`
 
