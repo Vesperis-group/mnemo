@@ -13,6 +13,6 @@
     "release-it": "21.0.1"
   },
   "overrides": {
-    "undici": "^7.28.0"
+    "undici": "^7.29.0"
   }
 }
