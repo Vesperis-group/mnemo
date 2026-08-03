@@ -1,12 +1,4 @@
-//! Commande `mnemo runbook` : génère un runbook Markdown réutilisable à partir
-//! des commandes d'une session ou d'un projet Git.
-//!
-//! Le runbook liste chaque commande dans une section Markdown numérotée avec son
-//! répertoire de travail, triées par ordre chronologique (le plus ancien en
-//! premier). Les lignes vides sont exclues. Le résultat est stable et
-//! déterministe : idéal pour une documentation ou un wiki.
-//!
-//! Les secrets sont redactés par défaut (`--no-redact` pour désactiver).
+//! Génération de runbook Markdown/JSON depuis une session ou un projet.
 
 use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
@@ -19,10 +11,6 @@ use crate::config;
 use crate::db;
 use crate::mdfmt::{display_home, md_code_block};
 use crate::secrets;
-
-// ---------------------------------------------------------------------------
-// Enums publics (réexportés pour cli.rs)
-// ---------------------------------------------------------------------------
 
 /// Format de sortie du runbook.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -44,10 +32,6 @@ pub enum GroupBy {
     Project,
 }
 
-// ---------------------------------------------------------------------------
-// Structures publiques
-// ---------------------------------------------------------------------------
-
 /// Une entrée du runbook : une commande avec son contexte minimal.
 #[derive(Debug, Clone)]
 pub struct RunbookEntry {
@@ -60,10 +44,6 @@ pub struct RunbookEntry {
     /// Racine Git (`git_root`), utilisée pour le groupement par projet.
     pub git_root: Option<String>,
 }
-
-// ---------------------------------------------------------------------------
-// Fonctions de récupération
-// ---------------------------------------------------------------------------
 
 /// Charge les commandes de la dernière session, en ordre chronologique croissant.
 /// Exclut les commandes vides (après trim).
@@ -114,17 +94,14 @@ pub fn fetch_project_commands(
     }
     let mut all: Vec<db::CommandRecord> = Vec::new();
     for root in &roots {
-        // project_records retourne DESC ; on collecte tout et on trie ensuite.
         let records = db::project_records(conn, root, None, None, false, None)?;
         all.extend(records);
     }
-    // Tri chronologique croissant (le plus ancien en premier).
     all.sort_by(|a, b| {
         a.created_at
             .cmp(&b.created_at)
             .then_with(|| a.id.cmp(&b.id))
     });
-    // Appliquer la limite après le tri.
     if let Some(n) = limit {
         all.truncate(n as usize);
     }
@@ -150,10 +127,6 @@ fn records_to_entries(records: Vec<db::CommandRecord>) -> Vec<RunbookEntry> {
         })
         .collect()
 }
-
-// ---------------------------------------------------------------------------
-// Rendu Markdown
-// ---------------------------------------------------------------------------
 
 /// Génère le document Markdown d'un runbook.
 ///
@@ -210,10 +183,6 @@ pub fn render_markdown(
 
     out
 }
-
-// ---------------------------------------------------------------------------
-// Rendu JSON
-// ---------------------------------------------------------------------------
 
 /// Ligne JSON pour une commande du runbook.
 #[derive(Serialize)]
@@ -289,10 +258,6 @@ pub fn render_json(
     serde_json::to_string_pretty(&doc).context("sérialisation JSON du runbook")
 }
 
-// ---------------------------------------------------------------------------
-// Helpers de groupement
-// ---------------------------------------------------------------------------
-
 /// Retourne les entrées groupées par clé (alphabétique), les commandes dans
 /// chaque groupe étant dans l'ordre de `entries` (chronologique).
 fn group_entries<'a>(
@@ -315,10 +280,6 @@ fn group_entries<'a>(
     }
     map
 }
-
-// ---------------------------------------------------------------------------
-// Point d'entrée de la commande
-// ---------------------------------------------------------------------------
 
 /// Point d'entrée de `mnemo runbook`.
 ///
@@ -367,7 +328,6 @@ pub fn run(
         );
     };
 
-    // Redaction des secrets (activée par défaut).
     let entries = if no_redact {
         entries
     } else {
@@ -415,10 +375,6 @@ pub fn run(
     }
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Tests unitaires
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -470,7 +426,6 @@ mod tests {
     fn render_echappe_les_backticks_dans_les_blocs() {
         let entries = make_entries(&[("echo `date`", "~/proj")]);
         let md = render_markdown("bt", "session s1", &entries, GroupBy::None);
-        // La clôture du bloc doit être plus longue que 1 backtick.
         let fences: Vec<&str> = md.lines().filter(|l| l.starts_with("```")).collect();
         assert_eq!(fences.len() % 2, 0, "blocs non équilibrés");
     }
@@ -551,13 +506,10 @@ mod tests {
             ("cmd3", "~/proj/foo"),
         ]);
         let md = render_markdown("t", "s", &entries, GroupBy::Cwd);
-        // Deux sections de niveau 2 : une pour chaque cwd distinct
         assert!(md.contains("## ~/proj/bar"));
         assert!(md.contains("## ~/proj/foo"));
-        // Dans le groupe foo, les commandes sont numérotées depuis 1
         assert!(md.contains("### 1."));
         assert!(md.contains("### 2."));
-        // Le contenu est présent
         assert!(md.contains("cmd1"));
         assert!(md.contains("cmd2"));
         assert!(md.contains("cmd3"));

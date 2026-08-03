@@ -1,11 +1,5 @@
 name: Fuzz
 
-# Fuzzing de la baseline `mnemo` avec cargo-fuzz (libFuzzer).
-#
-# nightly Rust et cargo-fuzz ne sont utilisés QUE dans ce workflow : le build,
-# les tests et les releases normales restent sur la toolchain stable figée par
-# `rust-toolchain.toml`. Voir docs/FUZZING.md.
-
 on:
   pull_request:
     paths:
@@ -23,11 +17,9 @@ on:
       - "Cargo.lock"
       - ".github/workflows/fuzz.yml"
   schedule:
-    # Campagne hebdomadaire plus longue, le dimanche à 05:00 UTC.
     - cron: "0 5 * * 0"
   workflow_dispatch:
 
-# Permissions minimales : lecture seule du contenu, aucun token d'écriture.
 permissions:
   contents: read
 
@@ -40,7 +32,6 @@ jobs:
     name: cargo-fuzz
     runs-on: ubuntu-latest
     env:
-      # Version épinglée de cargo-fuzz pour des runs reproductibles.
       CARGO_FUZZ_VERSION: "0.13.2"
     steps:
       - name: Checkout

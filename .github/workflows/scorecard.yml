@@ -1,24 +1,8 @@
 name: Scorecard
 
-# OpenSSF Scorecard : evalue la posture de securite open source du depot
-# (politiques de branche, epinglage des actions, permissions des workflows,
-# detection de secrets, etc.) et publie le resultat sur le service public
-# Scorecard (badge README) ainsi que dans l'onglet Security (Code Scanning).
-#
-# Ce workflow ne publie aucune release et ne modifie pas le produit. Permissions
-# minimales : lecture seule au niveau workflow ; le job ajoute uniquement
-# `id-token: write` (requis par `publish_results: true`) et
-# `security-events: write` (remontee SARIF dans Code Scanning).
-#
-# Actions epinglees par SHA de commit complet (supply chain). Le tag lisible est
-# rappele en commentaire. Pour mettre a jour :
-#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
-# (pour un tag annote, utiliser le SHA de la ligne `refs/tags/<tag>^{}`) puis
-# remplacer le hash ET le commentaire de version. Runner epingle sur ubuntu-24.04.
 on:
   branch_protection_rule:
   schedule:
-    # Lundi 07h00 UTC (decale des autres workflows planifies pour lisser la charge).
     - cron: "0 7 * * 1"
   push:
     branches: ["main"]
@@ -36,8 +20,6 @@ jobs:
     name: OpenSSF Scorecard
     runs-on: ubuntu-24.04
     permissions:
-      # Lecture du depot, jeton OIDC pour la publication, ecriture des alertes
-      # de securite (SARIF). Aucune autre permission accordee.
       contents: read
       id-token: write
       security-events: write
@@ -52,7 +34,6 @@ jobs:
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
-          # Alimente le badge public Scorecard via le service api.scorecard.dev.
           publish_results: true
 
       - name: Upload Scorecard SARIF artifact

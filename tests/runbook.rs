@@ -1,8 +1,4 @@
 //! Tests d'intégration de `mnemo runbook`.
-//!
-//! Chaque test s'exécute dans un HOME temporaire isolé (HOME + XDG_*), stdin
-//! fermé. Les commandes sont semées avec un `MNEMO_SESSION_ID` explicite ou via
-//! manipulation SQLite directe (contexte Git) pour des scénarios déterministes.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -36,7 +32,6 @@ fn init(home: &Path) {
     assert!(run(home, &["init"]).status.success());
 }
 
-/// Ajoute une commande rattachée à une session.
 fn add_with_session(home: &Path, session: &str, cmd: &str) {
     let out = mnemo(home)
         .env("MNEMO_SESSION_ID", session)
@@ -46,7 +41,6 @@ fn add_with_session(home: &Path, session: &str, cmd: &str) {
     assert!(out.status.success(), "add failed for {cmd}: {out:?}");
 }
 
-/// Ajoute une commande et force son contexte Git et son horodatage en base.
 fn seed_project(home: &Path, cmd: &str, root: &str, created_at: &str) {
     assert!(run(home, &["add", "--cmd", cmd, "--cwd", root])
         .status
@@ -61,7 +55,6 @@ fn seed_project(home: &Path, cmd: &str, root: &str, created_at: &str) {
     assert!(n >= 1, "commande absente : {cmd}");
 }
 
-/// Fixe l'horodatage d'une commande pour contrôler l'ordre chronologique.
 fn set_date(home: &Path, command: &str, date: &str) {
     let conn = rusqlite::Connection::open(db_path(home)).unwrap();
     let n = conn
@@ -72,10 +65,6 @@ fn set_date(home: &Path, command: &str, date: &str) {
         .unwrap();
     assert!(n >= 1, "commande absente : {command}");
 }
-
-// ---------------------------------------------------------------------------
-// --last
-// ---------------------------------------------------------------------------
 
 #[test]
 fn last_retourne_les_commandes_de_la_derniere_session() {
@@ -103,7 +92,6 @@ fn last_sans_session_echoue_proprement() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     init(home);
-    // Commande ajoutée sans MNEMO_SESSION_ID.
     assert!(run(home, &["add", "--cmd", "ls -la", "--cwd", "/tmp"])
         .status
         .success());
@@ -114,10 +102,6 @@ fn last_sans_session_echoue_proprement() {
         "--last sans session doit échouer proprement"
     );
 }
-
-// ---------------------------------------------------------------------------
-// --session
-// ---------------------------------------------------------------------------
 
 #[test]
 fn session_retourne_les_bonnes_commandes() {
@@ -157,10 +141,6 @@ fn session_inexistante_echoue_proprement() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// --project
-// ---------------------------------------------------------------------------
-
 #[test]
 fn project_par_nom_retourne_les_commandes() {
     let dir = tempfile::tempdir().unwrap();
@@ -179,7 +159,6 @@ fn project_par_nom_retourne_les_commandes() {
         "/home/user/myproject",
         "2026-06-22 08:05:00",
     );
-    // Commande d'un autre projet
     seed_project(home, "npm start", "/home/user/other", "2026-06-22 09:00:00");
 
     let out = run(home, &["runbook", "--project", "myproject"]);
@@ -206,10 +185,6 @@ fn project_inexistant_echoue_proprement() {
         "projet inexistant doit échouer proprement"
     );
 }
-
-// ---------------------------------------------------------------------------
-// --output / --force
-// ---------------------------------------------------------------------------
 
 #[test]
 fn output_cree_le_fichier() {
@@ -281,10 +256,6 @@ fn output_force_ecrase_le_fichier_existant() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// --limit
-// ---------------------------------------------------------------------------
-
 #[test]
 fn limit_borne_le_nombre_de_commandes() {
     let dir = tempfile::tempdir().unwrap();
@@ -309,10 +280,6 @@ fn limit_borne_le_nombre_de_commandes() {
     );
     assert!(md.contains("Commands: 2"), "Commands: 2 attendu");
 }
-
-// ---------------------------------------------------------------------------
-// Exclusivité mutuelle des sources
-// ---------------------------------------------------------------------------
 
 #[test]
 fn last_et_session_sont_mutuellement_exclusifs() {
@@ -359,10 +326,6 @@ fn aucune_source_produit_une_erreur_claire() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// --format json
-// ---------------------------------------------------------------------------
-
 #[test]
 fn format_json_produit_un_json_valide() {
     let dir = tempfile::tempdir().unwrap();
@@ -405,18 +368,12 @@ fn format_json_champ_command_present() {
     assert_eq!(cmd["n"], 1);
 }
 
-// ---------------------------------------------------------------------------
-// Redaction des secrets
-// ---------------------------------------------------------------------------
-
 #[test]
 fn redaction_activee_par_defaut() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     init(home);
 
-    // URL avec identifiants : détectée par secrets::analyze (CredentialUrl),
-    // mais non filtrée à l'enregistrement (aucun mot-clé sensible dans l'URL).
     add_with_session(
         home,
         "sess-r",
@@ -426,12 +383,10 @@ fn redaction_activee_par_defaut() {
     let out = run(home, &["runbook", "--last"]);
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let md = stdout(&out);
-    // Le mot de passe brut ne doit pas apparaître dans la sortie redactée.
     assert!(
         !md.contains("Xk7abc"),
         "le mot de passe brut ne doit pas apparaître dans la sortie redactée"
     );
-    // Une marque de redaction doit être présente.
     assert!(
         md.contains("[REDACTED]") || md.contains("[REDACTED COMMAND]"),
         "marque de redaction attendue"
@@ -453,16 +408,11 @@ fn no_redact_desactive_la_redaction() {
     let out = run(home, &["runbook", "--last", "--no-redact"]);
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let md = stdout(&out);
-    // Avec --no-redact, la valeur brute doit être préservée.
     assert!(
         md.contains("Xk7abc"),
         "le mot de passe brut doit être conservé avec --no-redact"
     );
 }
-
-// ---------------------------------------------------------------------------
-// --group-by
-// ---------------------------------------------------------------------------
 
 #[test]
 fn group_by_none_liste_plate() {
@@ -478,7 +428,6 @@ fn group_by_none_liste_plate() {
     let out = run(home, &["runbook", "--last", "--group-by", "none"]);
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let md = stdout(&out);
-    // Liste plate : ### N. <cwd>
     assert!(md.contains("### 1."), "numérotation plate attendue");
     assert!(md.contains("### 2."), "numérotation plate attendue");
     assert!(md.contains("cmd-alpha"));
@@ -491,7 +440,6 @@ fn group_by_cwd_groupe_les_sections() {
     let home = dir.path();
     init(home);
 
-    // Deux commandes dans /home/user/foo, une dans /home/user/bar
     let out = mnemo(home)
         .env("MNEMO_SESSION_ID", "sess-gcwd")
         .args(["add", "--cmd", "make build", "--cwd", "/home/user/foo"])
@@ -517,12 +465,10 @@ fn group_by_cwd_groupe_les_sections() {
     let out = run(home, &["runbook", "--last", "--group-by", "cwd"]);
     assert!(out.status.success(), "stderr: {}", stderr(&out));
     let md = stdout(&out);
-    // Deux sections de groupe de niveau 2
     assert!(md.contains("## "), "sections de groupe attendues");
     assert!(md.contains("make build"));
     assert!(md.contains("make test"));
     assert!(md.contains("npm install"));
-    // Les groupes sont présents
     let foo_pos = md.find("foo").unwrap_or(usize::MAX);
     let bar_pos = md.find("bar").unwrap_or(usize::MAX);
     assert!(foo_pos < usize::MAX, "groupe foo attendu");

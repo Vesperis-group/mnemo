@@ -6,31 +6,15 @@ on:
   pull_request:
     branches: [main]
 
-# Permissions minimales : lecture seule du dépôt.
 permissions:
   contents: read
 
-# Annule les exécutions précédentes encore en cours sur la même réf.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-
-# ---------------------------------------------------------------------------
-# Actions épinglées par SHA de commit complet (supply chain). Le tag lisible
-# est rappelé en commentaire. Pour mettre à jour : récupérer le nouveau SHA via
-#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
-# (pour un tag annoté, utiliser le SHA de la ligne `refs/tags/<tag>^{}`) puis
-# remplacer le hash ET le commentaire de version.
-#
-# La version exacte de Rust est figée par rust-toolchain.toml et installée par
-# le rustup pré-présent sur le runner (pas de canal flottant « stable », pas
-# d'action tierce pour la toolchain). Runner épinglé sur ubuntu-24.04 (image
-# GitHub maintenue, moins flottante que « ubuntu-latest » - mais pas immuable
-# au digest, cf. docs/THREAT_MODEL.md).
-# ---------------------------------------------------------------------------
 
 jobs:
   rust:
@@ -126,48 +110,39 @@ jobs:
           command -v jq >/dev/null
           secret_fragment="user:pass@"
 
-          # Test 1: --last produces non-empty output
           output="$(./target/release/mnemo runbook --last)"
           [ -n "${output}" ] || { echo "FAIL: --last produced empty output" >&2; exit 1; }
           echo "OK: --last produces non-empty output"
 
-          # Test 2: output contains "# Runbook"
           echo "${output}" | grep -q "# Runbook" || { echo "FAIL: output missing '# Runbook'" >&2; exit 1; }
           echo "OK: output contains '# Runbook'"
 
-          # Test 3: --output writes a file
           ./target/release/mnemo runbook --last --output "${HOME}/test-runbook.md"
           [ -f "${HOME}/test-runbook.md" ] || { echo "FAIL: output file not created" >&2; exit 1; }
           echo "OK: --output creates the file"
 
-          # Test 4: --limit 1 includes at most 1 command
           limited="$(./target/release/mnemo runbook --last --limit 1)"
           echo "${limited}" | grep -q "^- Commands: 1$" || { echo "FAIL: --limit 1 did not limit to 1 command" >&2; exit 1; }
           echo "OK: --limit 1 includes exactly 1 command"
 
-          # Test 5: --format json returns valid JSON
           json="$(./target/release/mnemo runbook --last --format json)"
           echo "${json}" | jq -e '.commands | type == "array" and length == 4' >/dev/null || { echo "FAIL: --format json output is invalid" >&2; exit 1; }
           echo "OK: --format json returns valid JSON"
 
-          # Test 6: redaction enabled by default
           echo "${output}" | grep -q "${secret_fragment}" && { echo "FAIL: default output leaked raw credential" >&2; exit 1; }
           echo "${output}" | grep -Eq "\\[REDACTED\\]|\\[REDACTED COMMAND\\]" || { echo "FAIL: default output missing redaction marker" >&2; exit 1; }
           echo "OK: redaction is enabled by default"
 
-          # Test 7: --no-redact keeps raw command text
           raw="$(./target/release/mnemo runbook --last --no-redact)"
           echo "${raw}" | grep -q "${secret_fragment}" || { echo "FAIL: --no-redact did not keep raw credential" >&2; exit 1; }
           echo "OK: --no-redact keeps raw command text"
 
-          # Test 8: --group-by cwd includes group fields and multiple groups
           json_cwd="$(./target/release/mnemo runbook --last --format json --group-by cwd)"
           echo "${json_cwd}" | jq -e '.commands | length > 0 and all(.[]; has("group") and (.group | type == "string" and length > 0))' >/dev/null || { echo "FAIL: --group-by cwd missing group fields" >&2; exit 1; }
           cwd_groups="$(echo "${json_cwd}" | jq '[.commands[].group] | unique | length')"
           [ "${cwd_groups}" -ge 2 ] || { echo "FAIL: --group-by cwd should create at least 2 groups" >&2; exit 1; }
           echo "OK: --group-by cwd groups commands"
 
-          # Test 9: --group-by project includes group fields and multiple groups
           json_project="$(./target/release/mnemo runbook --last --format json --group-by project)"
           echo "${json_project}" | jq -e '.commands | length > 0 and all(.[]; has("group") and (.group | type == "string" and length > 0))' >/dev/null || { echo "FAIL: --group-by project missing group fields" >&2; exit 1; }
           project_groups="$(echo "${json_project}" | jq '[.commands[].group] | unique | length')"

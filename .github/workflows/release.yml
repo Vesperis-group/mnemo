@@ -1,33 +1,9 @@
 name: Release
 
-# Déclenché à chaque push sur main (typiquement le merge d'une PR).
-# release-it bumpe la version (Cargo.toml), met à jour le CHANGELOG, crée le
-# tag vX.Y.Z, pousse le commit de release et publie la GitHub Release avec ses
-# artefacts Linux (musl statique + GNU/glibc 2.35).
-#
-# Linux uniquement (pas de Windows ni macOS).
-#
-# Choix d'architecture : un seul job sur ubuntu-22.04. Pourquoi pas une matrice
-# multi-runner ? Parce que release-it crée la Release ET attache les assets de
-# manière atomique ; tout construire dans un job unique évite les courses entre
-# jobs (qui crée la release ? qui attache quoi ?) et reste simple à maintenir.
-#   - musl  : binaire statique, construit via la cible x86_64-unknown-linux-musl.
-#   - glibc : binaire GNU construit nativement sur ubuntu-22.04 -> glibc 2.35,
-#             compatible avec les distributions récentes ET un peu plus anciennes.
-# L'ajout futur d'aarch64 (cross-compilation) pourra se faire en étendant la
-# liste des cibles dans le hook `after:bump` de release-it.json.
-#
-# Garde anti-boucle : le commit de release contient « [skip ci] ». GitHub ignore
-# nativement les évènements push/pull_request dont le message HEAD contient
-# « [skip ci] ». La condition `if` ci-dessous est une double sécurité.
 on:
   push:
     branches: [main]
 
-# Permissions minimales par défaut : lecture seule. Seul le job `publish`
-# élève ses permissions à `contents: write` (création de release/tag/commit).
-# Les jobs de qualité et d'audit n'ont jamais accès en écriture ni au token de
-# publication.
 permissions:
   contents: read
 
@@ -38,30 +14,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# ---------------------------------------------------------------------------
-# Chaîne de publication STRICTEMENT séquencée :
-#
-#   quality ─┐
-#            ├─► publish   (needs: [quality, audit], if: success())
-#   audit  ──┘
-#
-# Aucune release n'est publiée si la qualité (fmt/clippy/tests/build) OU
-# l'audit (cargo-deny/cargo-audit/gitleaks) échoue. Le packaging produit des
-# archives glibc + musl avec leur `.sha256`, vérifiées (`sha256sum -c`) par
-# scripts/package-release.sh ; un checksum invalide avorte la publication.
-#
-# Actions épinglées par SHA de commit complet (supply chain). Pour mettre à
-# jour : `git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>`
-# (tag annoté → ligne `^{}`), puis remplacer le hash ET le commentaire.
-#
-# Rust figé par rust-toolchain.toml (rustup du runner ; pas de canal flottant
-# ni d'action tierce pour la toolchain). Node figé par .node-version. Outils
-# cargo d'audit installés en VERSION EXACTE. Les jobs `quality`/`publish`
-# restent sur ubuntu-22.04 (lien glibc 2.35 volontaire pour l'asset GNU).
-# ---------------------------------------------------------------------------
-
 jobs:
-  # ----- 1. Qualité : fmt, clippy, tests, build (bloquant) -----
   quality:
     name: Quality gate (fmt, clippy, tests, build)
     runs-on: ubuntu-22.04
@@ -111,7 +64,6 @@ jobs:
           bash -n scripts/lib/bashrc.sh
           bash -n scripts/package-release.sh
 
-  # ----- 2. Audit supply chain : cargo-deny, cargo-audit, gitleaks (bloquant) -----
   audit:
     name: Audit supply chain (deny, audit, gitleaks)
     runs-on: ubuntu-24.04
@@ -168,30 +120,16 @@ jobs:
       - name: Run gitleaks
         run: gitleaks detect --source . --redact --verbose --exit-code 1
 
-  # ----- 3. Publication : build + package + checksum + GitHub Release -----
-  # Ne s'exécute QUE si `quality` ET `audit` ont réussi. Seul ce job dispose de
-  # `contents: write` et reçoit le token de publication.
   publish:
     name: Build Linux (musl + glibc2.35) et publication
     needs: [quality, audit]
     if: ${{ success() && !contains(github.event.head_commit.message, '[skip ci]') }}
-    # glibc 2.35 : le binaire GNU est lié à la glibc du runner.
     runs-on: ubuntu-22.04
     permissions:
       contents: write # commit, tag, push, création de release
       pull-requests: read # lecture du contexte des PR (changelog)
       id-token: write # OIDC keyless pour cosign (sign-blob / attest-blob)
     steps:
-      # ----- Jeton GitHub App de release (aucun PAT long terme) -----
-      # Le token est généré À L'EXÉCUTION : durée de vie courte, limité au
-      # seul dépôt mnemo et aux permissions de l'App `vesperis-mnemo-release`
-      # (Contents: write, Pull requests: read). Voir docs/RELEASE_APP.md.
-      #
-      # ⚠️ Pré-requis ruleset : l'App `vesperis-mnemo-release` DOIT figurer
-      # dans la *bypass list* des rulesets « Protect main » et « Protect
-      # release tags » pour pouvoir pousser le commit
-      # `chore: release vX.Y.Z [skip ci]` et le tag `vX.Y.Z` sur des refs
-      # protégées. Voir docs/REPOSITORY_RULES.md.
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -205,9 +143,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # Jeton de l'App de release (étape ci-dessus) : autorise le push du
-          # commit de release et du tag, y compris sur des refs protégées si
-          # l'App est dans la bypass list des rulesets.
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
@@ -223,12 +158,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          # IMPORTANT : la clé par défaut ne distingue pas la version d'image
-          # (« Linux » seulement). Les artefacts hôte de build-scripts compilés
-          # sur ubuntu-24.04 (glibc 2.39) seraient alors restaurés ici, sur
-          # ubuntu-22.04 (glibc 2.35), et échoueraient à l'exécution
-          # (« version `GLIBC_2.39' not found »). On isole donc le cache par
-          # image de runner.
           prefix-key: v0-rust-ubuntu2204
 
       - name: Setup Node.js (.node-version)
@@ -257,9 +186,6 @@ jobs:
           file target/x86_64-unknown-linux-musl/release/mnemo
           ldd target/x86_64-unknown-linux-musl/release/mnemo || true
 
-      # ----- Outillage d'intégrité des artefacts (SBOM + signatures) -----
-      # Versions EXACTES épinglées (pas de canal flottant), binaire cosign
-      # vérifié par empreinte SHA-256 avant installation (pas de `curl | bash`).
       - name: Install cosign (pinned + checksum verified)
         env:
           COSIGN_VERSION: "3.1.1"
@@ -281,17 +207,6 @@ jobs:
           cosign version
           cargo cyclonedx --version
 
-      # ----- Release versionnée (bump + tag + GitHub Release + artefacts) -----
-      # Les binaires définitifs sont (re)construits APRÈS le bump de version par
-      # le hook `after:bump` de release-it.json, afin que `mnemo version` reporte
-      # la bonne version. Le packaging génère les `.tar.gz` + `.sha256` (glibc et
-      # musl), vérifie chaque checksum (`sha256sum -c`), puis le SBOM CycloneDX,
-      # le fichier de checksums agrégé et les signatures + attestations de
-      # provenance cosign (keyless OIDC) sont produits ET vérifiés AVANT la
-      # création de la GitHub Release. Toute défaillance (build, packaging,
-      # checksum, SBOM, signature, provenance) interrompt release-it → aucune
-      # publication. Tous les artefacts sont attachés via le glob d'assets de
-      # release-it.json.
       - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
@@ -299,16 +214,9 @@ jobs:
 
       - name: Run release-it
         env:
-          # Même jeton App : release-it pousse le commit/tag et crée la
-          # GitHub Release via ce token éphémère (jamais un PAT).
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npm run release
 
-      # ----- Vérification de la provenance SLSA .intoto.jsonl -----
-      # Après npm run release, vérifier que le fichier .intoto.jsonl généré
-      # par scripts/intoto-provenance.sh est présent, non vide et correctement
-      # nommé. C'est une défense en profondeur : le hook after:bump a déjà
-      # échoué si le fichier était invalide, mais on double-vérifie ici.
       - name: Verify SLSA provenance (.intoto.jsonl)
         shell: bash
         run: |
