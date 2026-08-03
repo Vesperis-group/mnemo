@@ -1,6 +1,8 @@
 # Changelog
 
 
+## [1.8.1](https://github.com/Vesperis-group/mnemo/compare/v1.8.0...v1.8.1) (2026-08-03)
+
 ## [1.8.0](https://github.com/Vesperis-group/mnemo/compare/v1.7.0...v1.8.0) (2026-08-03)
 
 ### Features
