@@ -1,0 +1,106 @@
+name: Publish crates.io
+
+# Publishes mnemo-rs to crates.io when a GitHub Release is published, using
+# OIDC Trusted Publishing (no long-lived CRATES_IO_TOKEN secret stored in
+# GitHub). A workflow_dispatch trigger allows a controlled manual publish.
+#
+# Prerequisites (manual one-time setup, see docs/CI_CD.md):
+#   1. Create a GitHub environment named "crates-io".
+#   2. On crates.io → mnemo-rs → Settings → Trusted Publishing → Add trusted publisher:
+#        Repository owner : Vesperis-group
+#        Repository name  : mnemo
+#        Workflow filename: publish-crates.yml
+#        Environment      : crates-io
+#
+# The "already published" check in step `version` writes already_published=true|false.
+# All publish steps are conditioned on already_published == 'false' so a
+# re-triggered run (e.g. after a transient failure) does not fail on a
+# "crate version already uploaded" error.
+#
+# Actions pinned by full commit SHA (supply chain). To update:
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (for annotated tags use the SHA on the `^{}` line), then replace hash AND comment.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish mnemo-rs
+    runs-on: ubuntu-24.04
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write # required for OIDC Trusted Publishing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Verify package and check if already published
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          name="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')"
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+
+          if [ "$name" != "mnemo-rs" ]; then
+            echo "Unexpected package name: $name (expected mnemo-rs)"
+            exit 1
+          fi
+
+          echo "crate_name=$name" >> "$GITHUB_OUTPUT"
+          echo "crate_version=$version" >> "$GITHUB_OUTPUT"
+
+          status="$(curl -sS -o /tmp/crate-version.json -w '%{http_code}' \
+            -H "User-Agent: mnemo-release-workflow/1.0 (github.com/Vesperis-group/mnemo)" \
+            "https://crates.io/api/v1/crates/${name}/${version}")"
+
+          if [ "$status" = "200" ]; then
+            echo "${name} ${version} is already published on crates.io — skipping."
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          elif [ "$status" = "404" ]; then
+            echo "${name} ${version} is not yet published — proceeding."
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unexpected crates.io API status: $status"
+            cat /tmp/crate-version.json || true
+            exit 1
+          fi
+
+      - name: Dry-run publish
+        if: steps.version.outputs.already_published == 'false'
+        run: cargo publish --dry-run --locked
+
+      - name: Authenticate to crates.io (OIDC Trusted Publishing)
+        id: auth
+        if: steps.version.outputs.already_published == 'false'
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+      - name: Publish to crates.io
+        if: steps.version.outputs.already_published == 'false'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked
