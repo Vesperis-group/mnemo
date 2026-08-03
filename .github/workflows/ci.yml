@@ -77,3 +77,67 @@ jobs:
           bash -n scripts/uninstall.sh
           bash -n scripts/lib/bashrc.sh
           bash -n scripts/package-release.sh
+
+  runbook-smoke:
+    name: Runbook smoke test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Rust (pinned via rust-toolchain.toml)
+        run: |
+          rustup show
+          rustc --version
+          rustup show active-toolchain
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Build release binary
+        run: cargo build --locked --release
+
+      - name: Initialise isolated HOME and database
+        env:
+          HOME: ${{ runner.temp }}/mnemo-runbook-smoke
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME}"
+          ./target/release/mnemo init
+
+      - name: Inject test commands (with session ID)
+        env:
+          HOME: ${{ runner.temp }}/mnemo-runbook-smoke
+          MNEMO_SESSION_ID: smoke-runbook-ci
+        run: |
+          set -euo pipefail
+          ./target/release/mnemo add --cmd "echo hello world" --exit-code 0
+          ./target/release/mnemo add --cmd "git status" --exit-code 0
+          ./target/release/mnemo add --cmd "ls -la" --exit-code 0
+
+      - name: Smoke tests runbook
+        env:
+          HOME: ${{ runner.temp }}/mnemo-runbook-smoke
+        run: |
+          set -euo pipefail
+
+          # Test 1: --last produces non-empty output
+          output="$(./target/release/mnemo runbook --last)"
+          [ -n "${output}" ] || { echo "FAIL: --last produced empty output" >&2; exit 1; }
+          echo "OK: --last produces non-empty output"
+
+          # Test 2: output contains "# Runbook"
+          echo "${output}" | grep -q "# Runbook" || { echo "FAIL: output missing '# Runbook'" >&2; exit 1; }
+          echo "OK: output contains '# Runbook'"
+
+          # Test 3: --output writes a file
+          ./target/release/mnemo runbook --last --output "${HOME}/test-runbook.md"
+          [ -f "${HOME}/test-runbook.md" ] || { echo "FAIL: output file not created" >&2; exit 1; }
+          echo "OK: --output creates the file"
+
+          # Test 4: --limit 1 includes at most 1 command
+          limited="$(./target/release/mnemo runbook --last --limit 1)"
+          echo "${limited}" | grep -q "^- Commands: 1$" || { echo "FAIL: --limit 1 did not limit to 1 command" >&2; exit 1; }
+          echo "OK: --limit 1 includes exactly 1 command"
