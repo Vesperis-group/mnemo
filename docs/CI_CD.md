@@ -12,7 +12,7 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 | `audit.yml` | push `main`, pull_request | `cargo-audit`, `cargo-deny`, `cargo-machete`, `gitleaks`. |
 | `codeql.yml` | push, pull_request, schedule | Analyse statique (SAST) Rust. |
 | `lint.yml` | push, pull_request | `actionlint` et `ShellCheck`. |
-| `release.yml` | merge sur `main` | Release automatique signée (cosign, SBOM, provenance). |
+| `release.yml` | merge sur `main` | Release automatique signée (cosign, SBOM, provenance SLSA, `.intoto.jsonl`). |
 | `release-smoke.yml` | release publiée, manuel, hebdomadaire | Smoke tests d'installation post-release. |
 | `publish-crates.yml` | release publiée, manuel | Publication `mnemo-rs` sur crates.io via OIDC Trusted Publishing. |
 | `scorecard.yml` | push `main`, règle de branche, hebdomadaire, manuel | OpenSSF Scorecard (posture sécurité open source). |
@@ -106,7 +106,37 @@ Le workflow **ne publie aucune release** et ne modifie pas le produit. Ses
 résultats aident à identifier les prochains durcissements de la chaîne
 d'approvisionnement.
 
-## `fuzz.yml`
+## Provenance SLSA des releases (`.intoto.jsonl`)
+
+Chaque release produit un fichier `mnemo-v<version>-provenance.intoto.jsonl`
+attaché comme asset GitHub Release. Ce fichier est au format **in-toto JSONL**
+(une enveloppe DSSE par ligne) et couvre les quatre artefacts principaux :
+tarball glibc, tarball musl, SBOM CycloneDX et fichier de checksums.
+
+### Différence entre les artefacts d'intégrité
+
+| Artefact | Format | Rôle |
+| --- | --- | --- |
+| `<asset>.sha256` | texte | Empreinte SHA-256 de l'archive (vérification locale sans outil tiers). |
+| `<asset>.sigstore.json` | Sigstore bundle | Signature cosign keyless (certificat Fulcio éphémère, entrée Rekor). |
+| `<asset>.provenance.sigstore.json` | Sigstore bundle | Attestation de provenance SLSA v1 (prédicat `slsaprovenance1`, cosign). |
+| `*-provenance.intoto.jsonl` | in-toto JSONL | Enveloppes DSSE extraites des bundles Sigstore ; format reconnu par SLSA et OpenSSF Scorecard. |
+| `*-sbom.cdx.json` | CycloneDX | SBOM : liste des composants Rust du binaire. |
+| `*-checksums.txt` | texte | Empreintes agrégées (archives + SBOM), vérifiées avant signature. |
+
+### Génération
+
+Le fichier `.intoto.jsonl` est produit par
+[`scripts/intoto-provenance.sh`](../scripts/intoto-provenance.sh), appelé par
+le hook `after:bump` de `release-it.json` **après** `scripts/sign-release.sh`.
+Il extrait le champ `dsseEnvelope` de chaque bundle `.provenance.sigstore.json`
+déjà produit et vérifié par cosign. Aucune signature supplémentaire n'est
+effectuée ; le contenu cryptographique est identique aux bundles Sigstore.
+
+Un step de validation dans `release.yml` vérifie, après la création de la
+release, que l'asset `.intoto.jsonl` est bien présent dans la GitHub Release.
+
+
 
 Ce workflow exécute une baseline de fuzzing avec
 [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) (moteur libFuzzer) sur

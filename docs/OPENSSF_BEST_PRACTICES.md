@@ -32,7 +32,7 @@ repository so the form can be filled in quickly and honestly.
 | Secrets scanning | `gitleaks` on PR and push | [.github/workflows/audit.yml](../.github/workflows/audit.yml) |
 | Fuzzing | `cargo-fuzz` baseline with three targets | [fuzz/](../fuzz), [.github/workflows/fuzz.yml](../.github/workflows/fuzz.yml), [docs/FUZZING.md](FUZZING.md) |
 | Pinned dependencies | GitHub Actions pinned by full commit SHA | `.github/workflows/*.yml` |
-| Release integrity | SHA-256 checksums, cosign signatures, SLSA provenance, SBOM | [.github/workflows/release.yml](../.github/workflows/release.yml), [docs/THREAT_MODEL.md](THREAT_MODEL.md) |
+| Release integrity | SHA-256 checksums, cosign keyless signatures (Sigstore bundles), SLSA provenance (Sigstore bundles + `.intoto.jsonl`), SBOM CycloneDX | [.github/workflows/release.yml](../.github/workflows/release.yml), [docs/THREAT_MODEL.md](THREAT_MODEL.md) |
 | Post-release verification | Installation smoke tests on published releases | [.github/workflows/release-smoke.yml](../.github/workflows/release-smoke.yml) |
 | Branch protection | Documented repository rules and rulesets | [docs/REPOSITORY_RULES.md](REPOSITORY_RULES.md) |
 | Security posture tracking | OpenSSF Scorecard workflow and report | [.github/workflows/scorecard.yml](../.github/workflows/scorecard.yml), [docs/SCORECARD.md](SCORECARD.md) |

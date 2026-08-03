@@ -24,7 +24,7 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 | Token-Permissions | 10 | Permissions au moindre privilège | `security-events: write` scopé au job `analyze` | A (fait) |
 | Dependency-Update-Tool | 10 | Dependabot détecté | `.github/dependabot.yml` ajouté | A (fait) |
 | Fuzzing | 10 | Baseline `cargo-fuzz` détectée (3 cibles) | `fuzz/` + `fuzz.yml` ajoutés | A (fait) |
-| Signed-Releases | 8 | Provenance sur le fichier de checksums, pas sur chaque artefact | Logique release (non modifiée ici) | C |
+| Signed-Releases | 8 | `*.intoto.jsonl` ajouté comme asset de release ; score attendu en hausse au prochain scan après la première release avec ce fichier. Les anciennes releases sortiront progressivement de la fenêtre Scorecard | `scripts/intoto-provenance.sh` + hook `release-it.json` | B |
 | Vulnerabilities | 8 | `RUSTSEC-2026-0002` (lru) et `RUSTSEC-2024-0436` (paste), transitifs via `ratatui` | Suivi, autorisés dans `deny.toml` | B |
 | Branch-Protection | 8 | Protection non maximale (non appliquée aux admins, 1 approbation requise) | Rulesets (non modifiés ici) | C |
 | Code-Review | 1 | 3/23 changesets approuvés | Nécessite revue + approbation systématiques | C |

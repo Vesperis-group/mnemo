@@ -1227,7 +1227,10 @@ mnemo est outillé comme un vrai projet DevSecOps :
 Chaque release publie, pour chaque artefact `<asset>` : `<asset>.sha256`
 (empreinte), `<asset>.sigstore.json` (signature cosign) et
 `<asset>.provenance.sigstore.json` (attestation de provenance SLSA v1). Le
-fichier `mnemo-v<version>-checksums.txt` agrège les empreintes.
+fichier `mnemo-v<version>-checksums.txt` agrège les empreintes. Le fichier
+`mnemo-v<version>-provenance.intoto.jsonl` contient les enveloppes DSSE de
+provenance pour tous les artefacts, au format in-toto standard reconnu par
+OpenSSF Scorecard.
 
 ```bash
 # 1. Empreinte SHA-256 (toujours disponible, aucun outil tiers requis)
@@ -1305,6 +1308,7 @@ scripts/
 ├── generate-sbom.sh   # SBOM CycloneDX (cargo-cyclonedx)
 ├── checksums-release.sh # empreintes SHA-256 agrégées des assets
 ├── sign-release.sh    # signatures et provenance cosign (keyless, vérifiées)
+├── intoto-provenance.sh # enveloppes DSSE → provenance.intoto.jsonl (SLSA standard)
 └── lib/bashrc.sh      # logique .bashrc partagée (et testée)
 ```
 

@@ -303,3 +303,45 @@ jobs:
           # GitHub Release via ce token éphémère (jamais un PAT).
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npm run release
+
+      # ----- Vérification de la provenance SLSA .intoto.jsonl -----
+      # Après npm run release, vérifier que le fichier .intoto.jsonl généré
+      # par scripts/intoto-provenance.sh est présent, non vide et correctement
+      # nommé. C'est une défense en profondeur : le hook after:bump a déjà
+      # échoué si le fichier était invalide, mais on double-vérifie ici.
+      - name: Verify SLSA provenance (.intoto.jsonl)
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(git describe --tags --abbrev=0)"
+          VERSION="${TAG#v}"
+          INTOTO_FILE="mnemo-v${VERSION}-provenance.intoto.jsonl"
+
+          test -s "${INTOTO_FILE}" || {
+            echo "Erreur : ${INTOTO_FILE} est absent ou vide."
+            exit 1
+          }
+
+          case "${INTOTO_FILE}" in
+            *.intoto.jsonl) ;;
+            *) echo "Erreur : le fichier de provenance doit finir par .intoto.jsonl"; exit 1 ;;
+          esac
+
+          LINES="$(wc -l < "${INTOTO_FILE}")"
+          echo "✓ Provenance SLSA : ${INTOTO_FILE} (${LINES} enveloppes DSSE)"
+
+      - name: Verify .intoto.jsonl asset in GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(git describe --tags --abbrev=0)"
+          echo "Assets de la release ${TAG} :"
+          gh release view "${TAG}" --json assets \
+            | jq -r '.assets[].name | "  " + .'
+
+          gh release view "${TAG}" --json assets \
+            | jq -e '[.assets[].name | select(endswith(".intoto.jsonl"))] | length > 0' \
+            || { echo "Erreur : aucun asset *.intoto.jsonl dans la release ${TAG}"; exit 1; }
+          echo "✓ Asset .intoto.jsonl présent dans la release ${TAG}"
