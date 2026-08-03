@@ -23,6 +23,13 @@ mises à jour de dépendances. Dependabot conserve l'épinglage des actions par 
 et n'active aucun auto-merge. Voir [docs/SCORECARD.md](SCORECARD.md) pour la
 posture OpenSSF Scorecard détaillée.
 
+## Packaging crates.io (préparation)
+
+Le package crates.io est préparé sous le nom `mnemo-rs` (binaire `mnemo`), mais
+la publication n'est pas automatisée dans cette phase : aucun workflow CI ne
+fait de `cargo publish`. La première publication sera réalisée manuellement,
+puis le Trusted Publishing (OIDC) sera ajouté dans une PR dédiée.
+
 ## `release-smoke.yml`
 
 Ce workflow vérifie qu'une release **publiée** est réellement installable et
