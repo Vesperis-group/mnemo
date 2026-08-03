@@ -217,27 +217,6 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: npm run release
 
-      - name: Verify SLSA provenance (.intoto.jsonl)
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="$(git describe --tags --abbrev=0)"
-          VERSION="${TAG#v}"
-          INTOTO_FILE="mnemo-v${VERSION}-provenance.intoto.jsonl"
-
-          test -s "${INTOTO_FILE}" || {
-            echo "Erreur : ${INTOTO_FILE} est absent ou vide."
-            exit 1
-          }
-
-          case "${INTOTO_FILE}" in
-            *.intoto.jsonl) ;;
-            *) echo "Erreur : le fichier de provenance doit finir par .intoto.jsonl"; exit 1 ;;
-          esac
-
-          LINES="$(wc -l < "${INTOTO_FILE}")"
-          echo "✓ Provenance SLSA : ${INTOTO_FILE} (${LINES} enveloppes DSSE)"
-
       - name: Verify .intoto.jsonl asset in GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -250,6 +229,6 @@ jobs:
             | jq -r '.assets[].name | "  " + .'
 
           gh release view "${TAG}" --json assets \
-            | jq -e '[.assets[].name | select(endswith(".intoto.jsonl"))] | length > 0' \
-            || { echo "Erreur : aucun asset *.intoto.jsonl dans la release ${TAG}"; exit 1; }
-          echo "✓ Asset .intoto.jsonl présent dans la release ${TAG}"
+            | jq -e '[.assets[] | select(.name | endswith(".intoto.jsonl")) | select(.size > 0)] | length > 0' \
+            || { echo "Erreur : aucun asset *.intoto.jsonl non vide dans la release ${TAG}"; exit 1; }
+          echo "✓ Asset .intoto.jsonl non vide présent dans la release ${TAG}"
