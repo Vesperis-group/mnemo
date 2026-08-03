@@ -566,6 +566,53 @@ fn group_by_json_ajoute_champ_group() {
 }
 
 #[test]
+fn group_by_project_json_ajoute_champ_group() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    seed_project(
+        home,
+        "cmd-pa",
+        "/home/user/project-a",
+        "2026-06-25 10:00:00",
+    );
+    seed_project(
+        home,
+        "cmd-pb",
+        "/home/user/project-a",
+        "2026-06-25 10:01:00",
+    );
+
+    let out = run(
+        home,
+        &[
+            "runbook",
+            "--project",
+            "project-a",
+            "--format",
+            "json",
+            "--group-by",
+            "project",
+        ],
+    );
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let cmds = v["commands"].as_array().unwrap();
+    assert_eq!(cmds.len(), 2, "2 commandes attendues");
+    for cmd in cmds {
+        assert!(
+            cmd["group"].is_string(),
+            "champ group manquant dans la commande JSON"
+        );
+        assert!(
+            cmd["group"].as_str().unwrap().contains("project-a"),
+            "group attendu sur project-a"
+        );
+    }
+}
+
+#[test]
 fn markdown_ordre_chronologique_croissant() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
