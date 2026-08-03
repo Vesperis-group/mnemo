@@ -8,7 +8,7 @@ actions tierces par SHA de commit complet, déclarent des permissions minimales
 
 | Workflow | Déclencheurs | Rôle |
 | --- | --- | --- |
-| `ci.yml` | push, pull_request | `fmt --check`, `clippy -D warnings`, tests, build. |
+| `ci.yml` | push, pull_request | `fmt --check`, `clippy -D warnings`, tests, build ; smoke test `mnemo runbook`. |
 | `audit.yml` | push `main`, pull_request | `cargo-audit`, `cargo-deny`, `cargo-machete`, `gitleaks`. |
 | `codeql.yml` | push, pull_request, schedule | Analyse statique (SAST) Rust. |
 | `lint.yml` | push, pull_request | `actionlint` et `ShellCheck`. |
@@ -53,6 +53,34 @@ Côté GitHub - créer un **environment** nommé `crates-io` (Settings → Envir
 Le job `publish` utilise cet environment ; il est possible d'y ajouter des règles de protection (approbation manuelle, délai, etc.).
 
 Aucun secret `CRATES_IO_TOKEN` n'est ajouté ni nécessaire. Le job demande `id-token: write` uniquement pour obtenir le token OIDC court terme ; toutes les autres permissions restent en lecture seule.
+
+## `ci.yml` — job `runbook-smoke`
+
+Le job `runbook-smoke` est intégré dans `ci.yml` aux côtés de `rust` et `scripts`.
+Il tourne sur `ubuntu-24.04` avec `permissions: contents: read` uniquement et se
+déclenche sur les mêmes triggers (`push`, `pull_request` sur `main`).
+
+### Fonctionnement
+
+1. **Build** : compile `mnemo` en mode release (`cargo build --locked --release`).
+2. **Isolation** : initialise un `HOME` temporaire et isolé
+   (`${{ runner.temp }}/mnemo-runbook-smoke`) puis exécute `mnemo init` pour
+   créer une base SQLite propre.
+3. **Injection** : ajoute trois commandes de test via `mnemo add --cmd … --exit-code 0`
+   sous un `MNEMO_SESSION_ID` fixe (`smoke-runbook-ci`), ce qui les rattache à
+   une session identifiable par `--last`.
+4. **Tests smoke** :
+   - `mnemo runbook --last` → sortie non vide.
+   - La sortie contient `# Runbook`.
+   - `mnemo runbook --last --output <fichier>` → le fichier est créé.
+   - `mnemo runbook --last --limit 1` → la métadonnée `- Commands: 1` est présente.
+
+### Couverture future (après PR2 — `feat/runbook-harden-exports`)
+
+Une fois PR2 mergée, le job `runbook-smoke` sera étendu pour couvrir :
+- `--format json` : la sortie est du JSON valide (vérification via `jq`).
+- `--no-redact` : les commandes ne sont pas filtrées.
+- `--group-by cwd` / `--group-by project` : les sections de groupement sont présentes.
 
 ## `release-smoke.yml`
 
@@ -168,6 +196,12 @@ sert de **preuves** pour le badge OpenSSF Best Practices :
 - `fuzz.yml` - fuzzing `cargo-fuzz` ;
 - `release.yml` / `release-smoke.yml` - intégrité et vérification des releases ;
 - `scorecard.yml` - suivi continu de la posture OpenSSF Scorecard.
+
+Pour les opérations nécessitant une **traçabilité des commandes** (audits supply
+chain, post-mortem d'incidents, documentation de release), la commande
+`mnemo runbook` génère des runbooks Markdown ou JSON réutilisables depuis
+l'historique local. Voir [docs/RUNBOOK.md](RUNBOOK.md) pour la référence
+complète et les cas d'usage DevSecOps.
 
 Le dossier de preuves est centralisé dans
 [docs/OPENSSF_BEST_PRACTICES.md](OPENSSF_BEST_PRACTICES.md). Le projet a obtenu le
