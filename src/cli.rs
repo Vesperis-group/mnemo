@@ -3,6 +3,7 @@ use clap_complete::Shell;
 use std::path::PathBuf;
 
 use crate::export::ExportFormat;
+use crate::runbook::{GroupBy, RunbookFormat};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -406,6 +407,22 @@ pub enum Command {
         /// nom de projet).
         #[arg(long, value_name = "TITRE")]
         title: Option<String>,
+        /// Format de sortie. Par défaut, rendu Markdown. `json` produit un
+        /// document JSON stable et déterministe.
+        #[arg(long, value_name = "FORMAT", default_value = "markdown")]
+        format: RunbookFormat,
+        /// Désactive la redaction des secrets (activée par défaut).
+        /// Sans ce flag, chaque commande est analysée et les valeurs sensibles
+        /// détectées sont remplacées par [REDACTED] avant inclusion dans le
+        /// runbook.
+        #[arg(long)]
+        no_redact: bool,
+        /// Mode de groupement des commandes dans le runbook.
+        /// `none` (défaut) : liste plate numérotée.
+        /// `cwd` : sections par répertoire de travail.
+        /// `project` : sections par racine Git.
+        #[arg(long, value_name = "MODE", default_value = "none")]
+        group_by: GroupBy,
     },
 }
 
