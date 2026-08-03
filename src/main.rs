@@ -210,7 +210,12 @@ fn run() -> Result<()> {
             force,
             limit,
             title,
-        } => runbook::run(last, session, project, output, force, limit, title),
+            format,
+            no_redact,
+            group_by,
+        } => runbook::run(
+            last, session, project, output, force, limit, title, format, no_redact, group_by,
+        ),
     }
 }
 

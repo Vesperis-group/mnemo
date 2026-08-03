@@ -360,8 +360,210 @@ fn aucune_source_produit_une_erreur_claire() {
 }
 
 // ---------------------------------------------------------------------------
-// Contenu Markdown
+// --format json
 // ---------------------------------------------------------------------------
+
+#[test]
+fn format_json_produit_un_json_valide() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    add_with_session(home, "sess-j", "cargo build");
+    add_with_session(home, "sess-j", "cargo test");
+
+    let out = run(home, &["runbook", "--last", "--format", "json"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let text = stdout(&out);
+    let v: serde_json::Value = serde_json::from_str(&text).expect("JSON invalide");
+    assert!(v["title"].is_string(), "champ title manquant");
+    assert!(v["source"].is_string(), "champ source manquant");
+    assert!(v["generated_at"].is_string(), "champ generated_at manquant");
+    assert!(v["commands"].is_array(), "champ commands manquant");
+    assert_eq!(
+        v["commands"].as_array().unwrap().len(),
+        2,
+        "2 commandes attendues"
+    );
+}
+
+#[test]
+fn format_json_champ_command_present() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    add_with_session(home, "sess-j2", "git status");
+
+    let out = run(home, &["runbook", "--last", "--format", "json"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let cmd = &v["commands"][0];
+    assert!(cmd["command"].is_string());
+    assert!(cmd["cwd"].is_string());
+    assert!(cmd["timestamp"].is_string());
+    assert_eq!(cmd["n"], 1);
+}
+
+// ---------------------------------------------------------------------------
+// Redaction des secrets
+// ---------------------------------------------------------------------------
+
+#[test]
+fn redaction_activee_par_defaut() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    // URL avec identifiants : détectée par secrets::analyze (CredentialUrl),
+    // mais non filtrée à l'enregistrement (aucun mot-clé sensible dans l'URL).
+    add_with_session(
+        home,
+        "sess-r",
+        "curl https://user:Xk7abc@api.example.com/data",
+    );
+
+    let out = run(home, &["runbook", "--last"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let md = stdout(&out);
+    // Le mot de passe brut ne doit pas apparaître dans la sortie redactée.
+    assert!(
+        !md.contains("Xk7abc"),
+        "le mot de passe brut ne doit pas apparaître dans la sortie redactée"
+    );
+    // Une marque de redaction doit être présente.
+    assert!(
+        md.contains("[REDACTED]") || md.contains("[REDACTED COMMAND]"),
+        "marque de redaction attendue"
+    );
+}
+
+#[test]
+fn no_redact_desactive_la_redaction() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    add_with_session(
+        home,
+        "sess-nr",
+        "curl https://user:Xk7abc@api.example.com/data",
+    );
+
+    let out = run(home, &["runbook", "--last", "--no-redact"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let md = stdout(&out);
+    // Avec --no-redact, la valeur brute doit être préservée.
+    assert!(
+        md.contains("Xk7abc"),
+        "le mot de passe brut doit être conservé avec --no-redact"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// --group-by
+// ---------------------------------------------------------------------------
+
+#[test]
+fn group_by_none_liste_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    add_with_session(home, "sess-g", "cmd-alpha");
+    add_with_session(home, "sess-g", "cmd-beta");
+    set_date(home, "cmd-alpha", "2026-06-25 10:00:00");
+    set_date(home, "cmd-beta", "2026-06-25 10:01:00");
+
+    let out = run(home, &["runbook", "--last", "--group-by", "none"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let md = stdout(&out);
+    // Liste plate : ### N. <cwd>
+    assert!(md.contains("### 1."), "numérotation plate attendue");
+    assert!(md.contains("### 2."), "numérotation plate attendue");
+    assert!(md.contains("cmd-alpha"));
+    assert!(md.contains("cmd-beta"));
+}
+
+#[test]
+fn group_by_cwd_groupe_les_sections() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    // Deux commandes dans /home/user/foo, une dans /home/user/bar
+    let out = mnemo(home)
+        .env("MNEMO_SESSION_ID", "sess-gcwd")
+        .args(["add", "--cmd", "make build", "--cwd", "/home/user/foo"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let out = mnemo(home)
+        .env("MNEMO_SESSION_ID", "sess-gcwd")
+        .args(["add", "--cmd", "make test", "--cwd", "/home/user/foo"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let out = mnemo(home)
+        .env("MNEMO_SESSION_ID", "sess-gcwd")
+        .args(["add", "--cmd", "npm install", "--cwd", "/home/user/bar"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    set_date(home, "make build", "2026-06-25 10:00:00");
+    set_date(home, "make test", "2026-06-25 10:01:00");
+    set_date(home, "npm install", "2026-06-25 10:02:00");
+
+    let out = run(home, &["runbook", "--last", "--group-by", "cwd"]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let md = stdout(&out);
+    // Deux sections de groupe de niveau 2
+    assert!(md.contains("## "), "sections de groupe attendues");
+    assert!(md.contains("make build"));
+    assert!(md.contains("make test"));
+    assert!(md.contains("npm install"));
+    // Les groupes sont présents
+    let foo_pos = md.find("foo").unwrap_or(usize::MAX);
+    let bar_pos = md.find("bar").unwrap_or(usize::MAX);
+    assert!(foo_pos < usize::MAX, "groupe foo attendu");
+    assert!(bar_pos < usize::MAX, "groupe bar attendu");
+}
+
+#[test]
+fn group_by_json_ajoute_champ_group() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    init(home);
+
+    let out = mnemo(home)
+        .env("MNEMO_SESSION_ID", "sess-gjson")
+        .args(["add", "--cmd", "cmd-a", "--cwd", "/home/user/pa"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let out = mnemo(home)
+        .env("MNEMO_SESSION_ID", "sess-gjson")
+        .args(["add", "--cmd", "cmd-b", "--cwd", "/home/user/pb"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    set_date(home, "cmd-a", "2026-06-25 10:00:00");
+    set_date(home, "cmd-b", "2026-06-25 10:01:00");
+
+    let out = run(
+        home,
+        &["runbook", "--last", "--format", "json", "--group-by", "cwd"],
+    );
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    let v: serde_json::Value = serde_json::from_str(&stdout(&out)).unwrap();
+    let cmds = v["commands"].as_array().unwrap();
+    for cmd in cmds {
+        assert!(
+            cmd["group"].is_string(),
+            "champ group manquant dans la commande JSON"
+        );
+    }
+}
 
 #[test]
 fn markdown_ordre_chronologique_croissant() {
