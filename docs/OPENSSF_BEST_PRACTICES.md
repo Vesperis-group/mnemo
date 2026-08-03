@@ -43,20 +43,20 @@ and *gold* tiers. The items below summarize where mnemo already has concrete
 evidence; the maintainer remains responsible for the authoritative answers in
 the form.
 
-- **Basics** — public repository, MIT license, README describing the project,
+- **Basics** - public repository, MIT license, README describing the project,
   a documented contribution process (`CONTRIBUTING.md`) and a code of conduct
   (`CODE_OF_CONDUCT.md`, Contributor Covenant v2.1).
-- **Change control** — all changes go through pull requests on dedicated
+- **Change control** - all changes go through pull requests on dedicated
   branches; direct pushes to `main` are forbidden by convention and enforced via
   rulesets (see [docs/REPOSITORY_RULES.md](REPOSITORY_RULES.md)).
-- **Reporting** — a security policy with a private reporting channel
+- **Reporting** - a security policy with a private reporting channel
   (`SECURITY.md`) and structured issue templates.
-- **Quality** — automated build, tests, formatting and linting on every PR; a
+- **Quality** - automated build, tests, formatting and linting on every PR; a
   documented local quality gate (`make check`, `make security-full`).
-- **Security** — SAST (CodeQL), dependency audit (`cargo-audit`/`cargo-deny`),
+- **Security** - SAST (CodeQL), dependency audit (`cargo-audit`/`cargo-deny`),
   secrets scanning (`gitleaks`), fuzzing (`cargo-fuzz`), pinned dependencies, and
   signed, provenance-attested releases.
-- **Analysis** — static analysis and fuzzing are run in CI; dynamic analysis is
+- **Analysis** - static analysis and fuzzing are run in CI; dynamic analysis is
   partially covered by the fuzzing baseline (see [docs/FUZZING.md](FUZZING.md)).
 
 ## Known gaps to disclose honestly in the form

@@ -14,13 +14,13 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 
 | Check | Score | Raison | Action | Priorité |
 | --- | ---: | --- | --- | --- |
-| CI-Tests | 10 | Tests exécutés sur les PR (18/18) | — | — |
-| SAST | 10 | CodeQL actif sur tous les commits | — | — |
-| Pinned-Dependencies | 10 | Actions épinglées par SHA | — | — |
-| Dangerous-Workflow | 10 | Aucun motif dangereux | — | — |
-| Binary-Artifacts | 10 | Aucun binaire commité | — | — |
-| Security-Policy | 10 | `SECURITY.md` présent | — | — |
-| License | 10 | Licence MIT détectée | — | — |
+| CI-Tests | 10 | Tests exécutés sur les PR (18/18) | - | - |
+| SAST | 10 | CodeQL actif sur tous les commits | - | - |
+| Pinned-Dependencies | 10 | Actions épinglées par SHA | - | - |
+| Dangerous-Workflow | 10 | Aucun motif dangereux | - | - |
+| Binary-Artifacts | 10 | Aucun binaire commité | - | - |
+| Security-Policy | 10 | `SECURITY.md` présent | - | - |
+| License | 10 | Licence MIT détectée | - | - |
 | Token-Permissions | 10 | Permissions au moindre privilège | `security-events: write` scopé au job `analyze` | A (fait) |
 | Dependency-Update-Tool | 10 | Dependabot détecté | `.github/dependabot.yml` ajouté | A (fait) |
 | Fuzzing | 10 | Baseline `cargo-fuzz` détectée (3 cibles) | `fuzz/` + `fuzz.yml` ajoutés | A (fait) |
@@ -29,9 +29,9 @@ assumées. Le workflow d'évaluation est décrit dans [docs/CI_CD.md](CI_CD.md)
 | Branch-Protection | 8 | Protection non maximale (non appliquée aux admins, 1 approbation requise) | Rulesets (non modifiés ici) | C |
 | Code-Review | 1 | 3/23 changesets approuvés | Nécessite revue + approbation systématiques | C |
 | CII-Best-Practices | 0 | Badge OpenSSF Best Practices niveau Passing obtenu (projet 13366) | Le check passe au vert au prochain scan Scorecard | A (obtenu) |
-| Maintained | 0 | Projet créé il y a moins de 90 jours | S'améliore avec le temps | — |
-| Contributors | 0 | 0 organisation contributrice | Hors de portée d'une PR (pas de faux contributeurs) | — |
-| Packaging | -1 | Aucun workflow de packaging reconnu | Non concluant (publication binaire via GitHub App) | — |
+| Maintained | 0 | Projet créé il y a moins de 90 jours | S'améliore avec le temps | - |
+| Contributors | 0 | 0 organisation contributrice | Hors de portée d'une PR (pas de faux contributeurs) | - |
+| Packaging | -1 | Aucun workflow de packaging reconnu | Non concluant (publication binaire via GitHub App) | - |
 
 ## Corrections appliquées
 
@@ -59,9 +59,9 @@ Ajout d'une baseline `cargo-fuzz` (moteur libFuzzer) via le workflow
 [`fuzz/`](../fuzz). Trois cibles fuzzent des fonctions **pures** réellement
 sensibles, sans base de données, réseau ni shell :
 
-- `mdfmt_escape` — échappement Markdown (`src/mdfmt.rs`) ;
-- `secret_detection` — détection/redaction de secrets (`src/secrets.rs`) ;
-- `date_filter_parse` — parsing des durées/dates des filtres (`src/db.rs`,
+- `mdfmt_escape` - échappement Markdown (`src/mdfmt.rs`) ;
+- `secret_detection` - détection/redaction de secrets (`src/secrets.rs`) ;
+- `date_filter_parse` - parsing des durées/dates des filtres (`src/db.rs`,
   `src/prune.rs`).
 
 Rust nightly et `cargo-fuzz` (version épinglée) ne sont utilisés **que** dans ce
@@ -76,7 +76,7 @@ gaming.
 
 ### CII-Best-Practices (badge Passing obtenu)
 
-- **État** : le badge OpenSSF Best Practices **niveau Passing** est accordé —
+- **État** : le badge OpenSSF Best Practices **niveau Passing** est accordé -
   projet <https://www.bestpractices.dev/projects/13366>. Le badge est affiché
   dans le README.
 - **Preuves** : le dossier
@@ -90,11 +90,11 @@ gaming.
 
 - **État** : Scorecard ne détecte aucune organisation contributrice (le score
   reflète des contributions issues de plusieurs entreprises ou organisations).
-- **Action saine** : améliorer l'accueil contributeur — ajout de
+- **Action saine** : améliorer l'accueil contributeur - ajout de
   [CONTRIBUTING.md](../CONTRIBUTING.md), d'un [code de conduite](../CODE_OF_CONDUCT.md)
   (Contributor Covenant v2.1), de modèles d'issues
   ([.github/ISSUE_TEMPLATE/](../.github/ISSUE_TEMPLATE)) et d'un modèle de PR
-  ([.github/pull_request_template.md](../.github/pull_request_template.md)) — afin
+  ([.github/pull_request_template.md](../.github/pull_request_template.md)) - afin
   de faciliter de **vraies** contributions externes à l'avenir.
 - **Action refusée** : ne **jamais** créer de faux contributeurs ni de fausse
   organisation pour gonfler ce score. Il ne progressera légitimement qu'avec de

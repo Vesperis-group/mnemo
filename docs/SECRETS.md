@@ -95,7 +95,7 @@ appliquée.
 
 ## Voir aussi
 
-- [docs/THREAT_MODEL.md](THREAT_MODEL.md) — menace M8 (fuite de commandes
+- [docs/THREAT_MODEL.md](THREAT_MODEL.md) - menace M8 (fuite de commandes
   sensibles).
 - Option de configuration `sensitive_keywords` (filtrage à l'enregistrement et
   repli de détection).
