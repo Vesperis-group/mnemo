@@ -1009,8 +1009,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "mnemo"
-version = "1.6.18"
+name = "mnemo-fuzz"
+version = "0.0.0"
+dependencies = [
+ "libfuzzer-sys",
+ "mnemo-rs",
+]
+
+[[package]]
+name = "mnemo-rs"
+version = "1.6.19"
 dependencies = [
  "anyhow",
  "clap",
@@ -1027,14 +1035,6 @@ dependencies = [
  "tar",
  "toml",
  "ureq",
-]
-
-[[package]]
-name = "mnemo-fuzz"
-version = "0.0.0"
-dependencies = [
- "libfuzzer-sys",
- "mnemo",
 ]
 
 [[package]]

@@ -12,6 +12,7 @@ libfuzzer-sys = "=0.4.13"
 
 [dependencies.mnemo]
 path = ".."
+package = "mnemo-rs"
 
 # `fuzz/` est un workspace indépendant : il n'est jamais tiré dans le build ou
 # les tests normaux du binaire `mnemo` (nightly requis uniquement ici).
