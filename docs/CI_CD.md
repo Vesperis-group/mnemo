@@ -75,12 +75,12 @@ déclenche sur les mêmes triggers (`push`, `pull_request` sur `main`).
    - `mnemo runbook --last --output <fichier>` → le fichier est créé.
    - `mnemo runbook --last --limit 1` → la métadonnée `- Commands: 1` est présente.
 
-### Couverture future (après PR2 — `feat/runbook-harden-exports`)
+### Couverture future
 
-Une fois PR2 mergée, le job `runbook-smoke` sera étendu pour couvrir :
-- `--format json` : la sortie est du JSON valide (vérification via `jq`).
-- `--no-redact` : les commandes ne sont pas filtrées.
-- `--group-by cwd` / `--group-by project` : les sections de groupement sont présentes.
+Les cas suivants ne sont pas encore couverts par `runbook-smoke` et peuvent être ajoutés dans une PR dédiée :
+- `--format json` : vérifier que la sortie est du JSON valide (via `jq`).
+- `--no-redact` : vérifier que les commandes ne sont pas filtrées.
+- `--group-by cwd` / `--group-by project` : vérifier la présence des sections de groupement.
 
 ## `release-smoke.yml`
 
