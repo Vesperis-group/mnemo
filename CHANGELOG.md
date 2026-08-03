@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.7.0](https://github.com/Vesperis-group/mnemo/compare/v1.6.23...v1.7.0) (2026-08-03)
+
+### Features
+
+* add runbook command baseline ([#79](https://github.com/Vesperis-group/mnemo/issues/79)) ([5fc8cc9](https://github.com/Vesperis-group/mnemo/commit/5fc8cc9f7d7b465234a9cb53991973960eb3a1cf))
+
 ## [1.6.23](https://github.com/Vesperis-group/mnemo/compare/v1.6.22...v1.6.23) (2026-08-03)
 
 ## [1.6.22](https://github.com/Vesperis-group/mnemo/compare/v1.6.21...v1.6.22) (2026-08-03)
