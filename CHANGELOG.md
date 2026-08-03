@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.9.0](https://github.com/Vesperis-group/mnemo/compare/v1.8.2...v1.9.0) (2026-08-03)
+
+### Features
+
+* finalize runbook coverage ([#84](https://github.com/Vesperis-group/mnemo/issues/84)) ([5270a51](https://github.com/Vesperis-group/mnemo/commit/5270a51f1997776c4a00af7dd32591cac25ea4c0))
+
 ## [1.8.2](https://github.com/Vesperis-group/mnemo/compare/v1.8.1...v1.8.2) (2026-08-03)
 
 ## [1.8.1](https://github.com/Vesperis-group/mnemo/compare/v1.8.0...v1.8.1) (2026-08-03)
