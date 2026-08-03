@@ -1,6 +1,6 @@
 [package]
 name = "mnemo-rs"
-version = "1.9.0"
+version = "1.9.1"
 edition = "2021"
 description = "Local-first shell history manager with CLI/TUI, fuzzy search, project/session context, and DevSecOps-focused release hardening."
 license = "MIT"
