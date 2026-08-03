@@ -369,6 +369,44 @@ pub enum Command {
         #[command(subcommand)]
         action: SecretsCommand,
     },
+
+    /// Génère un runbook Markdown réutilisable à partir d'une session ou d'un
+    /// projet Git.
+    ///
+    /// Chaque commande est présentée dans une section Markdown numérotée avec
+    /// son répertoire de travail, triée par ordre chronologique (le plus ancien
+    /// en premier). Les commandes vides sont exclues. Le résultat peut être
+    /// écrit sur stdout (défaut) ou dans un fichier (`--output`).
+    ///
+    /// Exactement un des drapeaux `--last`, `--session` ou `--project` est
+    /// requis. Si aucun n'est fourni, une erreur claire est affichée.
+    Runbook {
+        /// Cible la dernière session (incompatible avec `--session` et
+        /// `--project`).
+        #[arg(long, conflicts_with_all = ["session", "project"])]
+        last: bool,
+        /// Identifiant de session explicite (incompatible avec `--last` et
+        /// `--project`).
+        #[arg(long, value_name = "ID", conflicts_with_all = ["last", "project"])]
+        session: Option<String>,
+        /// Nom court ou chemin `git_root` d'un projet (incompatible avec
+        /// `--last` et `--session`).
+        #[arg(long, value_name = "NOM|CHEMIN", conflicts_with_all = ["last", "session"])]
+        project: Option<String>,
+        /// Fichier de sortie (défaut : stdout).
+        #[arg(long, value_name = "FICHIER")]
+        output: Option<PathBuf>,
+        /// Autorise l'écrasement du fichier de sortie si déjà existant.
+        #[arg(long)]
+        force: bool,
+        /// Nombre maximal de commandes incluses dans le runbook.
+        #[arg(long, value_name = "N")]
+        limit: Option<u32>,
+        /// Titre personnalisé du runbook (défaut : identifiant de session ou
+        /// nom de projet).
+        #[arg(long, value_name = "TITRE")]
+        title: Option<String>,
+    },
 }
 
 /// Regroupe les options de `mnemo search` pour éviter une fonction à trop
