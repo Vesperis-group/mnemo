@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.8.0](https://github.com/Vesperis-group/mnemo/compare/v1.7.0...v1.8.0) (2026-08-03)
+
+### Features
+
+* harden runbook exports ([#80](https://github.com/Vesperis-group/mnemo/issues/80)) ([701ea13](https://github.com/Vesperis-group/mnemo/commit/701ea13991a609e71deb7c8ec49f55f5263783a7))
+
 ## [1.7.0](https://github.com/Vesperis-group/mnemo/compare/v1.6.23...v1.7.0) (2026-08-03)
 
 ### Features
