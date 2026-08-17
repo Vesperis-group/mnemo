@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [1.9.4](https://github.com/Vesperis-group/mnemo/compare/v1.9.3...v1.9.4) (2026-08-17)
+
+### Bug Fixes
+
+* patch lru for RUSTSEC-2026-0253 ([#101](https://github.com/Vesperis-group/mnemo/issues/101)) ([b0e6a65](https://github.com/Vesperis-group/mnemo/commit/b0e6a650a319ff1a7c382466d053a4e7adcdcd49))
+
 ## [1.9.3](https://github.com/Vesperis-group/mnemo/compare/v1.9.2...v1.9.3) (2026-08-03)
 
 ### Bug Fixes
